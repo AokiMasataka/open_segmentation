@@ -44,10 +44,12 @@ class SegmentationHead(nn.Module):
     def __init__(self, in_channels, num_classes, kernel_size=3, upsampling=1):
         super(SegmentationHead, self).__init__()
         kernel_size_t2 = (kernel_size, kernel_size)
-        module_list = [
-            nn.Conv2d(in_channels, num_classes, kernel_size=kernel_size_t2, padding=kernel_size // 2)]
+        module_list = []
         if 1 < upsampling:
             module_list.append(nn.UpsamplingBilinear2d(scale_factor=upsampling))
+        module_list.append(
+            nn.Conv2d(in_channels, num_classes, kernel_size=kernel_size_t2, padding=kernel_size // 2)
+        )
 
         self.body = nn.Sequential(*module_list)
 
