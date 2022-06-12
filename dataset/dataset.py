@@ -1,6 +1,6 @@
 from copy import deepcopy
 import torch
-from dataset.pipeline import LoadAnnotations
+from dataset.pipeline.transform import LoadAnnotations
 from losses import dice_metric
 
 
@@ -52,18 +52,20 @@ class SegmentData(torch.utils.data.Dataset):
         return dice_score
 
 
-def train_collate_fn(batch):
-    new_batch = {'image': [], 'label': [], 'original_shape': [], 'pad_t': [], 'pad_b': [], 'pad_l': [], 'pad_r': []}
-    for one_batch in batch:
-        new_batch['image'].append(one_batch['image'])
-        new_batch['label'].append(one_batch['label'])
+def train_collate_fn(batch_list):
+    images = []
+    labels = []
+    for batch in batch_list:
+        images.append(batch.pop('image'))
+        labels.append(batch.pop('label'))
+    images = torch.stack(images, dim=0)
+    labels = torch.stack(labels, dim=0)
+    return {'image': images, 'label': labels}
 
-        new_batch['original_shape'].append(one_batch['original_shape'])
-        new_batch['pad_t'].append(one_batch['pad_t'])
-        new_batch['pad_b'].append(one_batch['pad_b'])
-        new_batch['pad_l'].append(one_batch['pad_l'])
-        new_batch['pad_r'].append(one_batch['pad_r'])
 
-    new_batch['image'] = torch.stack(new_batch['image'], dim=0)
-    new_batch['label'] = torch.stack(new_batch['label'], dim=0)
-    return new_batch
+def test_collate_fn(batch_list):
+    images = []
+    for batch in batch_list:
+        images.append(batch.pop('image'))
+    images = torch.cat(images, dim=0)
+    return {'images': images, 'metas': batch_list}

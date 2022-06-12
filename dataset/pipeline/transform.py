@@ -14,6 +14,7 @@ __all__ = [
     'LoadAnnotations',
     'Resize',
     'Padding',
+    'RemovePad',
     'RandomFlipHorizontal',
     'FlipHorizontal',
     'RandomFlipVertical',
@@ -23,19 +24,20 @@ __all__ = [
 
 @PIPELINES.register_module
 class Compose:
-    def __init__(self, transforms: list):
+    def __init__(self, transforms: dict):
         self.transforms = transforms
 
     def __call__(self, results):
-        for transform in self.transforms:
+        for transform in self.transforms.values():
             results = transform(results)
 
-        results['image'] = np.ascontiguousarray(results['image'])
-        if 'label' in results:
-            results['label'] = np.ascontiguousarray(results['label'])
+        if isinstance(results['image'], np.ndarray):
+            results['image'] = np.ascontiguousarray(results['image'])
+            if 'label' in results:
+                results['label'] = np.ascontiguousarray(results['label'])
 
-        results = self._transpose(results)
-        results = self._to_tensor(results)
+            results = self._transpose(results)
+            results = self._to_tensor(results)
         return results
 
     @staticmethod
@@ -157,7 +159,7 @@ class Padding:
                 array=results['label'],
                 pad_width=((top, bottom), (left, right), (0, 0)),
                 mode='constant',
-                constant_values=self.pad_value
+                constant_values=self.label_pad_value
             )
 
         return results
@@ -173,6 +175,20 @@ class Padding:
         left_pad = width_buff // 2
         right_pad = left_pad + width_buff % 2
         return top_pad, bottom_pad, left_pad, right_pad
+
+
+class RemovePad:
+    def __init__(self):
+        pass
+
+    def __call__(self, results):
+        w, h = results['image'].shape[:2]
+        pad_b = h - results['pad_b']
+        pad_r = w - results['pad_r']
+        results['image'] = results['image'][results['pad_t']:pad_b, results['pad_l']:pad_r, :]
+        if 'label' in results:
+            results['label'] = results['label'][results['pad_t']:pad_b, results['pad_l']:pad_r, :]
+        return results
 
 
 @PIPELINES.register_module
