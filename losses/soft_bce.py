@@ -5,7 +5,7 @@ from torch.nn import functional
 from builder import LOSSES
 
 
-__all__ = ["SoftBCEWithLogitsLoss"]
+__all__ = ['SoftBCEWithLogitsLoss']
 
 
 @LOSSES.register_module

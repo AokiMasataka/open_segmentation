@@ -32,7 +32,7 @@ class Registry:
     def build_pipline(self, config, mode='train_pipeline'):
         compose_module = self._module_dict['Compose']
 
-        pipelines = []
+        pipelines = {}
         config = config[mode]
         if not isinstance(config, list):
             config_list = [config]
@@ -42,7 +42,7 @@ class Registry:
         for config in config_list:
             _type = config.pop('type')
             module = self._module_dict[_type]
-            pipelines.append(module(**config))
+            pipelines[_type] = module(**config)
 
         pipeline = compose_module(pipelines)
         return pipeline

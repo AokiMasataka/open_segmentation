@@ -1,11 +1,11 @@
 from torch import nn
 import timm
-# from builder import BACKBONES
+from builder import BACKBONES
 
 
-# BACKBONES.register_module
+@BACKBONES.register_module
 class EfficientNet(nn.Module):
-    def __init__(self, model_name, pretrained=False, stage_index=5):
+    def __init__(self, model_name='efficientnet_b2', pretrained=False, stage_index=5):
         super(EfficientNet, self).__init__()
         base_net = timm.create_model(model_name=model_name, pretrained=pretrained, drop_path_rate=0.1)
         self.stem = base_net.conv_stem
@@ -18,7 +18,7 @@ class EfficientNet(nn.Module):
             base_net.blocks[5:]
         ]
 
-        self.blocks = blocks[:stage_index]
+        self.blocks = nn.ModuleList(blocks[:stage_index])
     
     def forward(self, x):
         feats = []
@@ -28,15 +28,3 @@ class EfficientNet(nn.Module):
             feats.append(x)
         
         return feats
-
-
-if __name__ == '__main__':
-	import torch
-	image = torch.rand(2, 3, 224, 224)
-	model = EfficientNet(model_name='efficientnet_b0', stage_index=5)
-
-	with torch.no_grad():
-		feats = model(image)
-	
-	for feat in feats:
-		print(feat.shape)

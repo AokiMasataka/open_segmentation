@@ -1,6 +1,7 @@
 from torch import nn
 
 from builder import SEGMENTER
+from utils import force_fp32
 
 
 @SEGMENTER.register_module
@@ -24,20 +25,21 @@ class EncoderDecoder(nn.Module):
 
     def forward_train(self, image, label):
         logit = self(image)
-        loss = self._get_loss(logit, label)
-        return loss
+        loss, losses = self._get_loss(logit, label)
+        return loss, losses
 
     def forward_test(self, image, label):
         logit = self(image)
-        loss = self._get_loss(logit, label)
+        loss, _ = self._get_loss(logit, label)
         return {'loss': loss, 'logit': logit}
 
+    @force_fp32
     def _get_loss(self, logit, label):
-        losses = []
+        losses = {}
         for loss_name, loss_fn in zip(self.losses.keys(), self.losses.values()):
-            losses.append(loss_fn(logit, label))
-        loss = sum(losses)
-        return loss
+            losses[loss_name] = loss_fn(logit, label)
+        loss = sum(losses.values())
+        return loss, losses
 
 
 class SegmentationHead(nn.Module):
