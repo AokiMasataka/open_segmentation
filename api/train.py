@@ -1,10 +1,9 @@
+import os
 from copy import deepcopy
-import numpy as np
 import torch
 from torch.cuda import amp
 
-from api.valid import valid, valid_tta
-import matplotlib.pyplot as plt
+from api.valid import valid_fn
 
 
 def train(
@@ -14,64 +13,96 @@ def train(
         train_laoder,
         valid_dataset,
         logger,
-        epochs,
-        threshold=0.5,
-        fp16=False,
+        train_config,
         save_dir='',
-        tta=False
     ):
-
-    step_per_epoch = train_laoder.__len__()
-    log_interval = step_per_epoch // 10
+    max_iters = train_config.get('max_iters', 50_000)
+    eval_interval = train_config.get('eval_interval', 5_000)
+    save_checkpoint = train_config.get('save_checkpoint', False)
+    log_interval = train_config.get('log_interval', 500)
+    threshold = train_config.get('threshold', 0.5)
+    checkpoint = train_config.get('checkpoint', False)
 
     best_loss = float('Inf')
     best_score = -float('Inf')
     best_state = deepcopy(model.state_dict())
+    mean_train_loss = 0.0
+    loss_dict = {key: 0.0 for key in model.losses.keys()}
 
-    logger.info(f'INFO: use amp {fp16}')
+    if checkpoint:
+        cpt = torch.load(checkpoint)
+        model.load_state_dict(cpt['model'])
+        optimizer.load_state_dict(cpt['optimizer'])
+        lr_scheduler.load_state_dict(cpt['lr_scheduler'])
+        start_step = cpt['step']
+    else:
+        start_step = 0
+
+    fp16 = train_config.get('fp16', False)
+    logger.info(f'use amp: {fp16}')
     scaler = amp.GradScaler(enabled=fp16)
-    for epoch in range(epochs):
-        model.train()
 
-        train_mean_loss = 0.0
-
-        for step, batch in enumerate(train_laoder, 1):
+    step = start_step
+    while True:
+        for batch in train_laoder:
+            step += 1
             image, label = batch['image'].cuda(), batch['label'].cuda()
-
             optimizer.zero_grad()
 
             with amp.autocast(enabled=fp16):
-                loss = model.forward_train(image=image, label=label)
+                loss, losses = model.forward_train(image=image, label=label)
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
 
             lr_scheduler.step()
 
-            train_mean_loss += loss.item()
+            mean_train_loss += loss.item()
+            for key in losses.keys():
+                loss_dict[key] += losses[key].item()
 
-            if step % log_interval == 0:
-                s = step / step_per_epoch
-                s = epoch + s
-                logger.info(f'epoch: [{round(s, 1)}/{epochs}] - loss: {loss:.6f}')
+            if (step % eval_interval == 0 and step % log_interval == 0) or step % eval_interval == 0:
+                if valid_dataset is not None:
+                    model.eval()
+                    valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
+                    logger.info(f'iter: [{step}] - dice score: {valid_score:.6f}')
+                    if best_score < valid_score:
+                        best_score = valid_score
+                        best_state = deepcopy(model.state_dict())
+                    model.train()
+                else:
+                    if (mean_train_loss / log_interval) < best_loss:
+                        best_loss = mean_train_loss / log_interval
+                        best_score = 0.0
+                        best_state = deepcopy(model.state_dict())
 
-        if valid_dataset is not None:
-            model.eval()
-            if tta:
-                valid_loss, valid_score = valid_tta(model=model, valid_dataset=valid_dataset, threshold=threshold)
-            else:
-                valid_loss, valid_score = valid(model=model, valid_dataset=valid_dataset, threshold=threshold)
-            logger.info(f'epoch: [{epoch + 1}/{epochs}] - valid loss: {valid_loss:.6f} - dice score: {valid_score:.6f}')
-            if valid_loss < best_loss:
-                best_loss = valid_loss
-                best_score = valid_score
-                best_state = deepcopy(model.state_dict())
+                mean_train_loss = 0.0
+                loss_dict = {key: 0.0 for key in model.losses.keys()}
 
-        else:
-            if train_mean_loss < best_loss:
-                best_loss = train_mean_loss
-                best_score = 0.0
-                best_state = deepcopy(model.state_dict())
+                if save_checkpoint:
+                    os.makedirs(f'{save_dir}/checkpoint/', exist_ok=True)
+                    cpt = {
+                        'model': deepcopy(model.state_dict()),
+                        'optimizer': deepcopy(optimizer.state_dict()),
+                        'lr_scheduler': deepcopy(lr_scheduler.state_dict()),
+                        'step': step
+                    }
+                    torch.save(cpt, f'{save_dir}/checkpoint/step{step}.cpt')
+
+            elif step % log_interval == 0:
+                loss_log = ''
+                for key, value in zip(loss_dict.keys(), loss_dict.values()):
+                    loss_log += f' - {key}: {value / log_interval:.6f}'
+
+                logger.info(f'step: [{step}/{max_iters}]{loss_log} - loss: {mean_train_loss / log_interval:.6f}')
+                mean_train_loss = 0.0
+                loss_dict = {key: 0.0 for key in model.losses.keys()}
+
+            if step == max_iters:
+                break
+        if step == max_iters:
+            break
 
     logger.info(f'Best loss: {best_loss:.6f}')
     logger.info(f'Best score: {best_score:.6f}')
