@@ -10,8 +10,6 @@ from builder import PIPELINES
 
 __all__ = [
     'Compose',
-    'LoadImageFromFile',
-    'LoadAnnotations',
     'Resize',
     'Padding',
     'RemovePad',
@@ -52,56 +50,6 @@ class Compose:
         results['image'] = torch.tensor(results['image'], dtype=torch.float)
         if 'label' in results:
             results['label'] = torch.tensor(results['label'], dtype=torch.float)
-        return results
-
-
-@PIPELINES.register_module
-class LoadImageFromFile:
-    def __init__(self, to_float=False, color_type='color', max_value=None, force_3chan=False):
-        self.to_float = to_float
-        self.color_type = color_type
-        self.max_value = max_value
-        self.force_3chan = force_3chan
-
-    def __call__(self, results):
-        image_file = results['image_path']
-
-        if self.color_type == 'color':
-            image = cv2.cvtColor(cv2.imread(image_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-        elif self.color_type == 'anydepth':
-            image = cv2.imread(image_file, cv2.IMREAD_ANYDEPTH)
-        else:
-            Warning('color_type is color or anydepth')
-            image = cv2.cvtColor(cv2.imread(image_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-
-        if self.to_float:
-            try:
-                image = image.astype(np.float32)
-            except:
-                print('None type object file:', image_file)
-                assert image == np.ndarray
-
-        if self.max_value == 'max':
-            image = image / np.max(image)
-
-        if self.force_3chan:
-            image = np.stack([image for _ in range(3)], -1)
-
-        results['image'] = image
-        results['original_shape'] = (image.shape[1], image.shape[0])
-        results['scale_factor'] = 1.0
-        return results
-
-
-@PIPELINES.register_module
-class LoadAnnotations:
-    def __init__(self):
-        pass
-
-    def __call__(self, results):
-        label_file = results['label_path']
-        label = cv2.imread(label_file, cv2.IMREAD_COLOR)
-        results['label'] = label
         return results
 
 

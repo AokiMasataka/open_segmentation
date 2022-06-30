@@ -33,10 +33,8 @@ def get_logger(log_file=None, stream=True):
 def cast_tensor_dtype(inputs, src_type, dst_type):
     if isinstance(inputs, torch.Tensor):
         return inputs.to(dst_type) if inputs.dtype == src_type else inputs
-
     elif isinstance(inputs, (list, tuple)):
         return [cast_tensor_dtype(inputs=item, src_type=src_type, dst_type=dst_type) for item in inputs]
-
     else:
         return inputs
 

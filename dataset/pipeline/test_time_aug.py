@@ -66,10 +66,7 @@ class TestTimeAugment:
             if augmented_result['flip']:
                 augmented_result = self.flip(augmented_result)
 
-            image = cv2.resize(
-                src=augmented_result['image'], dsize=origin_shape, interpolation=cv2.INTER_NEAREST
-            )
-
+            image = cv2.resize(src=augmented_result['image'], dsize=origin_shape, interpolation=cv2.INTER_NEAREST)
             preds_list.append(image)
 
         return sum(preds_list) / preds_list.__len__()

@@ -56,10 +56,7 @@ class TransUnet(nn.Module):
 class Transformer(nn.Module):
 	def __init__(self, model_name, input_dim, image_size, patch_size=1):
 		super(Transformer, self).__init__()
-		_base = timm.create_model(
-			model_name=model_name,
-			pretrained=True
-		)
+		_base = timm.create_model(model_name=model_name, pretrained=True)
 
 		if _base.embed_dim != input_dim:
 			self.patch_embed = nn.Linear(in_features=input_dim, out_features=_base.embed_dim)

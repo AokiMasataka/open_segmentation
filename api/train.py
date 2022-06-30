@@ -94,8 +94,12 @@ def train(
                 loss_log = ''
                 for key, value in zip(loss_dict.keys(), loss_dict.values()):
                     loss_log += f' - {key}: {value / log_interval:.6f}'
+                loss_log += f' - loss: {mean_train_loss / log_interval:.6f}'
 
-                logger.info(f'step: [{step}/{max_iters}]{loss_log} - loss: {mean_train_loss / log_interval:.6f}')
+                last_lr = lr_scheduler.get_last_lr()
+                lr_log = f' - lr: {last_lr:.6f}'
+
+                logger.info(f'step: [{step}/{max_iters}]{lr_log}{loss_log}')
                 mean_train_loss = 0.0
                 loss_dict = {key: 0.0 for key in model.losses.keys()}
 
