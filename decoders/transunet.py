@@ -1,7 +1,7 @@
 from torch import nn
 import timm
 from timm.models.layers import trunc_normal_
-from decoders.base import DecoderBasicBlock, DecoderBottleneckBlock
+from decoders._base import DecoderBasicBlock, DecoderBottleneckBlock
 from builder import DECODERS
 
 
@@ -50,6 +50,9 @@ class TransUnet(nn.Module):
 		for decoder_block, feature in zip(self.blocks, features):
 			x = decoder_block(x=x, skip=feature)
 		return x
+
+	def decoder_out_dim(self):
+		return self._decoder_channels[-1]
 
 
 class Transformer(nn.Module):

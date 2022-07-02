@@ -1,11 +1,11 @@
 from torch import nn
-from decoders.base import DecoderBasicBlock, DecoderBottleneckBlock
+from decoders._base import DecoderBase, DecoderBasicBlock, DecoderBottleneckBlock
 
 from builder import DECODERS
 
 
 @DECODERS.register_module
-class Unet(nn.Module):
+class Unet(DecoderBase):
     def __init__(self, encoder_channels, decoder_channels, n_blocks=5, block_type='basic'):
         super(Unet, self).__init__()
         assert n_blocks == len(decoder_channels)
@@ -42,3 +42,6 @@ class Unet(nn.Module):
         for decoder_block, feature in zip(self.blocks, features):
             x = decoder_block(x=x, skip=feature)
         return x
+
+    def decoder_out_dim(self):
+        return self._decoder_channels[-1]

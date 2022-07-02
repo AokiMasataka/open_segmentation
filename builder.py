@@ -90,13 +90,6 @@ def build_pipeline(config, mode='train_pipeline'):
     return PIPELINES.build_pipline(config, mode=mode)
 
 
-# def build_model(config):
-#     segmenter = build_segmenter(config['model']['decoders'])
-#     segmenter.backbone = build_backbone(config['model']['backbones'])
-#     segmenter.loss = build_losses(config['model']['loss'])
-#     return segmenter
-
-
 def build_model(config):
     backbone = build_backbone(config['model']['backbones'])
     decoder = build_decoder(config['model']['decoder'])
@@ -107,3 +100,15 @@ def build_model(config):
     if init_config is not None:
         model.load_state_dict(torch.load(init_config['weight_path']))
     return model
+
+
+def module_registry():
+    import backbones
+    import decoders
+    import losses
+    import segmenter
+    import dataset
+    import optimizer
+
+
+module_registry()

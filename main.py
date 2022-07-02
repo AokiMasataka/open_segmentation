@@ -3,16 +3,10 @@ import sys
 import warnings
 from torch.utils.data import DataLoader
 
-from dataset import SegmentData, train_collate_fn
 from api import train
+from dataset import SegmentData, train_collate_fn
 from utils import seed_everything, get_logger
 
-import backbones
-import decoders
-import losses
-import segmenter
-import dataset
-import optimizer
 import builder
 
 

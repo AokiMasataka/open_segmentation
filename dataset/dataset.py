@@ -1,6 +1,6 @@
 from copy import deepcopy
 import torch
-from dataset.pipeline.transform import LoadAnnotations
+from dataset.pipeline.loading import LoadAnnotations
 from losses import dice_metric
 
 
