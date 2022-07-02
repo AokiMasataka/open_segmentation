@@ -6,43 +6,31 @@ from builder import BACKBONES
 
 @BACKBONES.register_module
 class ResNet(BackboneBase):
-    def __init__(self, model_name='resnet50', pretrained=False, init_config=None):
+    def __init__(self, model_name='resnet50', pretrained=False, n_blocks=5, init_config=None):
         super(ResNet, self).__init__(init_config=init_config)
         model = get_model(model_name, pretrained)
 
-        self.stem = nn.Sequential(
-            model.conv1,
-            model.bn1,
-            model.relu
-        )
-        self.maxpool = model.maxpool
-        self.layer1 = model.layer1
-        self.layer2 = model.layer2
-        self.layer3 = model.layer3
-        self.layer4 = model.layer4
+        blocks = [
+            nn.Sequential(model.conv1, model.bn1, model.relu),
+            nn.Sequential(model.maxpool, *model.layer1),
+            model.layer2,
+            model.layer3,
+            model.layer4,
+        ]
 
-        self._in_channels = (
-            model.conv1.out_channels,
-            model.layer1[-1].conv1.in_channels,
-            model.layer2[-1].conv1.in_channels,
-            model.layer3[-1].conv1.in_channels,
-            model.layer4[-1].conv1.in_channels,
-        )
+        self.blocks = nn.ModuleDict({
+            f'block{index}': block for index, block in zip(range(n_blocks), blocks)
+        })
+
+        block1_channel = blocks[0][0].out_channels
+        self.out_channels = tuple([3, block1_channel] + [block[-1].conv1.in_channels for block in blocks[1:n_blocks]])
 
     def forward(self, x):
-        feats = []
-        x = self.stem(x)
-        feats.append(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        feats.append(x)
-        x = self.layer2(x)
-        feats.append(x)
-        x = self.layer3(x)
-        feats.append(x)
-        x = self.layer4(x)
-        feats.append(x)
-        return feats
+        features = [x]
+        for block in self.blocks.values():
+            x = block(x)
+            features.append(x)
+        return features
 
 
 def get_model(model_name, pretrained):
@@ -62,15 +50,17 @@ def get_model(model_name, pretrained):
     elif model_name == 'resnext101_32x8d':
         model = resnet.resnext101_32x8d(pretrained=pretrained)
     else:
-        assert 'no model_name'
+        NotImplementedError(f'{model_name}')
     return model
 
 
 if __name__ == '__main__':
     import torch
-    _model = ResNet('resnet50', pretrained=False)
+    _model = ResNet('resnet50', pretrained=False, stage_index=5)
 
     with torch.no_grad():
         feats = _model(torch.rand(4, 3, 224, 224))
+
+    print(_model.out_channels)
     for feat in feats:
         print(feat.shape)

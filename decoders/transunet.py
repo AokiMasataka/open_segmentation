@@ -11,13 +11,14 @@ class TransUnet(nn.Module):
 		super(TransUnet, self).__init__()
 		self._encoder_channels = encoder_channels
 		self._decoder_channels = decoder_channels
+		encoder_channels = list(encoder_channels)
+		decoder_channels = list(decoder_channels)
 
-		encoder_channels = encoder_channels[::-1]
-
+		encoder_channels.reverse()
 		# computing blocks input and output channels
 		head_channels = encoder_channels[0]
-		in_channels = [head_channels] + list(decoder_channels[:-1])
-		skip_channels = list(encoder_channels[1:]) + [0]
+		in_channels = [head_channels] + decoder_channels[:-1]
+		skip_channels = encoder_channels[1:] + [0]
 		out_channels = decoder_channels
 
 		# combine decoders keyword arguments
@@ -40,16 +41,14 @@ class TransUnet(nn.Module):
 			input_dim=encoder_channels[0]
 		)
 
-	def forward(self, *features):
-		features = features[::-1]  # reverse channels to start from head of encoder
+	def forward(self, features):
+		features.reverse()
 
-		x = features[0]
+		x = features.pop(0)
 		x = self.transformer(x)
-		skips = features[1:]
 
-		for i, decoder_block in enumerate(self.blocks):
-			skip = skips[i] if i < len(skips) else None
-			x = decoder_block(x, skip)
+		for decoder_block, feature in zip(self.blocks, features):
+			x = decoder_block(x=x, skip=feature)
 		return x
 
 
@@ -57,11 +56,9 @@ class Transformer(nn.Module):
 	def __init__(self, model_name, input_dim, image_size, patch_size=1):
 		super(Transformer, self).__init__()
 		_base = timm.create_model(model_name=model_name, pretrained=True)
+		patch_size_t2 = (patch_size, patch_size)
 
-		if _base.embed_dim != input_dim:
-			self.patch_embed = nn.Linear(in_features=input_dim, out_features=_base.embed_dim)
-		else:
-			self.patch_embed = None
+		self.patch_embed = nn.Conv2d(input_dim, _base.embed_dim, kernel_size=patch_size_t2, stride=patch_size_t2)
 		num_patches = (image_size // patch_size) * (image_size // patch_size)
 		
 		self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, _base.embed_dim))
@@ -71,15 +68,14 @@ class Transformer(nn.Module):
 
 		trunc_normal_(self.pos_embed, std=0.02)
 	
-	def forward(self, feat):
-		feat = feat.flatten(2).transpose(1, 2)
-		if self.patch_embed is not None:
-			feat = self.patch_embed(feat)
+	def forward(self, hidden_state):
+		hidden_state = hidden_state.flatten(2).transpose(1, 2)
+		hidden_state = self.patch_embed(hidden_state)
 
-		feat = self.pos_drop(feat + self.pos_embed)
-		feat = self.blocks(feat)
-		feat = self.norm(feat)
-		return feat
+		hidden_state = self.pos_drop(hidden_state + self.pos_embed)
+		hidden_state = self.blocks(hidden_state)
+		hidden_state = self.norm(hidden_state)
+		return hidden_state
 
 
 if __name__ == '__main__':

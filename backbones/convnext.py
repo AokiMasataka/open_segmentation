@@ -1,9 +1,9 @@
 from torch import nn
 import timm
-# from builder import BACKBONES
+from builder import BACKBONES
 
 
-# BACKBONES.register_module
+@BACKBONES.register_module
 class ConvNeXt(nn.Module):
 	def __init__(self, model_name, pretrained=False, drop_path_rate=0.0, stage_index=5, stem_type='dual'):
 		super(ConvNeXt, self).__init__()
@@ -13,17 +13,18 @@ class ConvNeXt(nn.Module):
 			drop_path_rate=drop_path_rate,
 			stem_type=stem_type
 		)
-		self.stem = base_net.stem
-		self.stages = base_net.stages[:stage_index - 1]
-	
+		blocks = [self.stem, *base_net.stages]
+
+		self.blocks = nn.ModuleDict({
+			f'block{index}': block for index, block in zip(range(stage_index), blocks)
+		})
+
 	def forward(self, x):
-		feats = []
-		x = self.stem(x)
-		feats.append(x)
-		for stage in self.stages:
-			x = stage(x)
-			feats.append(x)
-		return feats
+		features = []
+		for block in self.blocks.values():
+			x = block(x)
+			features.append(x)
+		return features
 
 
 if __name__ == '__main__':
