@@ -2,12 +2,6 @@ import torch
 
 from utils import seed_everything
 from dataset import PostProcesser
-import backbones
-import decoders
-import losses
-import segmenter
-import dataset
-import optimizer
 import builder
 
 
@@ -38,26 +32,3 @@ class InferenceSegmenter:
 
         pred = self.post_process(results, logit)
         return pred
-
-
-# from glob import glob
-# import numpy as np
-# import cv2
-#
-# scans_dir = 'D:/Dataset/uw-madison-gi-tract-image-segmentation/train/case123/case123_day20/scans/*.png'
-#
-# config = 'D:/Projects/open_segment/work_dir/eff/eff_fold0/config.py'
-# weight = 'D:/Projects/open_segment/work_dir/eff/eff_fold0/best_loss.pth'
-#
-# segmenter = InferenceSegmenter(config, weight)
-#
-# index = 81
-# image_scans = [path.replace('\\', '/') for path in glob(scans_dir)]
-# image_path = image_scans[index]
-#
-# image = cv2.imread(image_path, cv2.IMREAD_ANYDEPTH)
-# image = image.astype(np.float32)
-# image = image / np.max(image)
-# image = np.stack([image for _ in range(3)], axis=-1)
-#
-# pred = segmenter(image)
