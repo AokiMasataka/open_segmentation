@@ -42,9 +42,9 @@ class TransUnet(nn.Module):
 		)
 
 	def forward(self, features):
+		x = features.pop()
 		features.reverse()
 
-		x = features.pop(0)
 		x = self.transformer(x)
 
 		for decoder_block, feature in zip(self.blocks, features):

@@ -36,9 +36,8 @@ class Unet(nn.Module):
         self.blocks = nn.ModuleList(blocks)
 
     def forward(self, features):
+        x = features.pop()
         features.reverse()
-        x = features.pop(0)
-        # features.append(None)
 
         for decoder_block, feature in zip(self.blocks, features):
             x = decoder_block(x=x, skip=feature)
