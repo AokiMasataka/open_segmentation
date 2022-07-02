@@ -1,27 +1,24 @@
 from torch import nn
 
+from segmenter._base import SegmenterBase
 from builder import SEGMENTER
 from utils import force_fp32
 
 
 @SEGMENTER.register_module
-class EncoderDecoder(nn.Module):
+class EncoderDecoder(SegmenterBase):
     def __init__(self, backbone, decoder, losses, num_classes=3):
-        super(EncoderDecoder, self).__init__()
+        super().__init__()
         self.backbone = backbone
         self.decoder = decoder
         self.losses = losses
         self.num_classes = num_classes
 
-        self.seg_head = SegmentationHead(self.decoder._decoder_channels[-1], num_classes=num_classes)
-
-    def _encode_decode(self, image):
-        features = self.backbone(image)
-        return self.decoder(*features)
+        self.seg_head = SegmentationHead(self.decoder.decoder_out_dim, num_classes=num_classes)
 
     def forward(self, image):
-        feature = self._encode_decode(image)
-        return self.seg_head(feature)
+        decode_out = self.decoder(self.backbone(image))
+        return self.seg_head(decode_out)
 
     def forward_train(self, image, label):
         logit = self(image)
