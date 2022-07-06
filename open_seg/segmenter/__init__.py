@@ -1,0 +1,1 @@
+from open_seg.segmenter.encoder_decoder import EncoderDecoder
