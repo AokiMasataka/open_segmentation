@@ -3,6 +3,7 @@ from typing import Optional
 from abc import ABCMeta, abstractmethod
 
 import torch
+from open_seg.utils import conv3x3, conv1x1, init_weight
 
 
 class SegmenterBase(torch.nn.Module, metaclass=ABCMeta):
@@ -39,3 +40,17 @@ class SegmenterBase(torch.nn.Module, metaclass=ABCMeta):
             print(miss_match_key)
 
         self._is_init = True
+
+
+class SegmentationHead(torch.nn.Module):
+    def __init__(self, in_channels, num_classes, hidden_rate=1.0):
+        super(SegmentationHead, self).__init__()
+        hidden_dim = int(in_channels * hidden_rate)
+        self.conv1 = conv3x3(in_channels, hidden_dim).apply(init_weight)
+        self.act = torch.nn.ELU(True)
+        self.conv2 = conv1x1(hidden_dim, num_classes).apply(init_weight)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.act(x)
+        return self.conv2(x)
