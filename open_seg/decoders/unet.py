@@ -1,5 +1,5 @@
 from torch import nn
-from open_seg.decoders._base import DecoderBase, DecoderBasicBlock, DecoderBottleneckBlock
+from open_seg.decoders._base import DecoderBase, DECODER_BLOCK
 
 from open_seg.builder import DECODERS
 
@@ -9,6 +9,7 @@ class Unet(DecoderBase):
     def __init__(self, encoder_channels, decoder_channels, n_blocks=5, block_type='basic'):
         super(Unet, self).__init__()
         assert n_blocks == len(decoder_channels)
+        assert block_type in DECODER_BLOCK.keys()
 
         self._encoder_channels = encoder_channels
         self._decoder_channels = decoder_channels
@@ -21,17 +22,11 @@ class Unet(DecoderBase):
         in_channels = [head_channels] + decoder_channels[:-1]
         skip_channels = encoder_channels[1:] + [0]
         out_channels = decoder_channels
+        in_channels = [in_ch + skip_ch for in_ch, skip_ch in zip(in_channels, skip_channels)]
 
-        block = DecoderBasicBlock
-        if block_type == 'basic':
-            block = DecoderBasicBlock
-        elif block_type == 'bottleneck':
-            block = DecoderBottleneckBlock
-        else:
-            ValueError(f'block_type is basic or bottleneck')
-
+        block = DECODER_BLOCK[block_type]
         blocks = [
-            block(in_ch, skip_ch, out_ch) for in_ch, skip_ch, out_ch in zip(in_channels, skip_channels, out_channels)
+            block(in_ch, out_ch) for in_ch, out_ch in zip(in_channels, out_channels)
         ]
         self.blocks = nn.ModuleList(blocks)
 
@@ -41,6 +36,8 @@ class Unet(DecoderBase):
 
         for decoder_block, feature in zip(self.blocks, features):
             x = decoder_block(x=x, skip=feature)
+
+        x = self.blocks[-1](x=x)
         return x
 
     def decoder_out_dim(self):

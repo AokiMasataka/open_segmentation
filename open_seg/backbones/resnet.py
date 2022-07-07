@@ -21,10 +21,10 @@ class ResNet(BackboneBase):
         })
 
         block1_channel = blocks[0][0].out_channels
-        self.channels = tuple([3, block1_channel] + [block[-1].conv1.in_channels for block in blocks[1:n_blocks]])
+        self._out_channels = tuple([block1_channel] + [block[-1].conv1.in_channels for block in blocks[1:n_blocks]])
 
     def forward(self, x):
-        features = [x]
+        features = []
         for block in self.blocks.values():
             x = block(x)
             features.append(x)

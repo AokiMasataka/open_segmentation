@@ -1,10 +1,10 @@
+# https://github.com/tikutikutiku/kaggle-hubmap/blob/main/src/models.py
 import torch
 from torch import nn
 from torch.nn import functional
 from open_seg.decoders._base import DecoderBase, DECODER_BLOCK
 
 from open_seg.builder import DECODERS
-from open_seg.utils import conv3x3, conv1x1, init_weight
 
 
 @DECODERS.register_module
@@ -37,15 +37,11 @@ class UnetHypercolum(DecoderBase):
             kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False
         )
 
-        self.scales = (1, 2, 4, 8, 16, 32)
-        self.final_conv = nn.Sequential(
-            conv3x3(sum(decoder_channels[1:]), 128).apply(init_weight),
-            nn.ELU(True),
-            conv1x1(128, 1).apply(init_weight)
-        )
+        self.scales = (2, 4, 8, 16)
+        self._decoder_out_dim = sum(decoder_channels[1:])
 
     def forward(self, features):
-        features = features[2:]
+        features = features[1:]
         features.reverse()
 
         decoder_features = [self.center_block(features[0])]
@@ -56,12 +52,12 @@ class UnetHypercolum(DecoderBase):
         decoder_features.append(self.blocks[-1](decoder_features[-1]))
         decoder_features = decoder_features[1:]
 
-        for index, scale in zip(range(decoder_features.__len__() - 1, -1, -1), self.scales):
+        for index, scale in zip(range(decoder_features.__len__() - 1), self.scales[::-1]):
             decoder_features[index] = functional.interpolate(decoder_features[index], scale_factor=scale, mode='bilinear', align_corners=True)
 
         hypercol = torch.cat(decoder_features, dim=1)
-        logits = self.final_conv(hypercol)
-        return logits
+        # logits = self.final_conv(hypercol)
+        return hypercol
 
     def decoder_out_dim(self):
-        return self._decoder_channels[-1]
+        return self._decoder_out_dim

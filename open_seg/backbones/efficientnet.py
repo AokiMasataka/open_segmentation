@@ -23,7 +23,7 @@ class EfficientNet(BackboneBase):
         block2_channel = blocks[1][-1].conv_pwl.out_channels
         block3_channel = blocks[2][-1].conv_pwl.out_channels
         out_channels = [block[-1][-1].conv_pwl.out_channels for block in blocks[3:n_blocks]]
-        self._out_channels = tuple([3, block1_channel, block2_channel, block3_channel] + out_channels)
+        self._out_channels = tuple([block1_channel, block2_channel, block3_channel] + out_channels)
     
     def forward(self, x):
         features = [x]

@@ -45,9 +45,8 @@ class DecoderBase(torch.nn.Module, metaclass=ABCMeta):
 
 
 class DecoderBasicBlock(nn.Module):
-    def __init__(self, in_channels, skip_channels, out_channels, scale_factor=2, mode='nearest'):
+    def __init__(self, in_channels, out_channels, scale_factor=2, mode='nearest'):
         super(DecoderBasicBlock, self).__init__()
-        in_channels = in_channels + skip_channels
         self.block = nn.Sequential(
             conv3x3(in_channel=in_channels, out_channel=out_channels),
             nn.BatchNorm2d(out_channels),
