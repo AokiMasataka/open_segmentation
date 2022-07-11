@@ -10,43 +10,6 @@ class Registry:
         self._module_dict[module.__name__] = module
         return module
 
-    # def build(self, config):
-    #     _type = config.pop('type')
-    #     module = self._module_dict[_type]
-    #     _instance = module(**config)
-    #     return _instance
-
-    # def build_losses(self, config):
-    #     losses = {}
-    #     if isinstance(config, dict):
-    #         config_list = [config]
-    #     else:
-    #         config_list = config
-    #
-    #     for config in config_list:
-    #         _type = config.pop('type')
-    #         module = self._module_dict[_type]
-    #         losses[_type] = module(**config)
-    #     return losses
-
-    # def build_pipline(self, config, mode='train_pipeline'):
-    #     compose_module = self._module_dict['Compose']
-    #
-    #     pipelines = {}
-    #     config = config[mode]
-    #     if not isinstance(config, list):
-    #         config_list = [config]
-    #     else:
-    #         config_list = config
-    #
-    #     for config in config_list:
-    #         _type = config.pop('type')
-    #         module = self._module_dict[_type]
-    #         pipelines[_type] = module(**config)
-    #
-    #     pipeline = compose_module(pipelines)
-    #     return pipeline
-
     def build_pipline(self, config, mode='train_pipeline'):
         compose_module = self._module_dict['Compose']
 
