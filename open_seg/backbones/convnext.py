@@ -13,12 +13,17 @@ class ConvNeXt(BackboneBase):
 			f'block{index}': block for index, block in zip(range(stage_index), blocks)
 		})
 
+		self._out_channels = ()
+
 	def forward(self, x):
 		features = []
 		for block in self.blocks.values():
 			x = block(x)
 			features.append(x)
 		return features
+	
+	def out_channels(self):
+		return self._out_channels
 
 
 @BACKBONES.register_module
