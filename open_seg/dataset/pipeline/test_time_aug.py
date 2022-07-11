@@ -3,7 +3,7 @@ from copy import deepcopy
 import cv2
 import torch
 from open_seg.builder import PIPELINES
-from open_seg.dataset.pipeline.transform import Resize, Padding, RemovePad, FlipHorizontal
+from .transform import Resize, Padding, RemovePad, FlipHorizontal
 
 
 _UNION = Union[list, tuple]

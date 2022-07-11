@@ -1,6 +1,7 @@
 import io
 import os
 from setuptools import find_packages, setup, Command
+from open_seg import __version__
 
 
 NAME = 'open_seg'
@@ -25,16 +26,7 @@ except FileNotFoundError:
 
 
 about = {}
-if not VERSION:
-    project_slug = NAME.lower().replace('-', '_').replace(' ', '_')
-    with open(os.path.join(here, project_slug, '__version__.py')) as f:
-        exec(f.read(), about)
-else:
-    about['__version__'] = VERSION
-
-
-def _requires_from_file(filename):
-    return open(filename).read().splitlines()
+about['__version__'] = __version__
 
 
 setup(
@@ -47,7 +39,7 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=find_packages(exclude=['open_seg', 'tools']),
+    packages=find_packages(exclude=['open_seg']),
     install_requires=REQUIRED,
     extras_require=EXTRAS,
     include_package_data=True,

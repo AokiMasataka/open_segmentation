@@ -120,13 +120,9 @@ def build_model(config):
     return model
 
 
-def module_registry():
-    import backbones
-    import decoders
-    import losses
-    import segmenter
-    import dataset
-    import optimizer
-
-
-module_registry()
+# import .backbones
+# import decoders
+# import losses
+# import segmenter
+# import dataset
+# import optimizer
