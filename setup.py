@@ -12,7 +12,7 @@ AUTHOR = None
 REQUIRES_PYTHON = '>=3.9.0'
 VERSION = None
 
-REQUIRED = ['torch', 'torchvision', 'timm']
+REQUIRED = ['torch', 'torchvision', 'timm', 'tqdm']
 EXTRAS = {}
 
 

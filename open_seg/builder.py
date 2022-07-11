@@ -95,7 +95,6 @@ def build_losses(config):
 def build_optimizer(config):
     return OPTIMIZER.build(config)
 
-
 def build_scheduler(config):
     if config['T_max'] == 'total_step':
         config['T_max'] = config['total_step']
@@ -118,15 +117,3 @@ def build_model(config):
     if init_config is not None:
         model.load_state_dict(torch.load(init_config['weight_path']))
     return model
-
-
-def module_registry():
-    import backbones
-    import decoders
-    import losses
-    import segmenter
-    import dataset
-    import optimizer
-
-
-module_registry()
