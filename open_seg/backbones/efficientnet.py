@@ -1,6 +1,6 @@
 from torch import nn
 import timm
-from open_seg.backbones._base import BackboneBase
+from ._base import BackboneBase
 from open_seg.builder import BACKBONES
 
 

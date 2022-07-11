@@ -1,6 +1,6 @@
 from copy import deepcopy
 import torch
-from open_seg.dataset.pipeline.loading import LoadAnnotations
+from pipeline.loading import LoadAnnotations
 from open_seg.losses import dice_metric
 
 

@@ -1,4 +1,4 @@
-from open_seg.segmenter._base import SegmenterBase, SegmentationHead
+from ._base import SegmenterBase, SegmentationHead
 from open_seg.builder import SEGMENTER
 from open_seg.utils import force_fp32
 

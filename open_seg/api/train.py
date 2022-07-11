@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader
 
 from open_seg.dataset import SegmentData, train_collate_fn
 from open_seg.utils import seed_everything, get_logger
-from open_seg.api.valid import valid_fn
 from open_seg import builder
+from .valid import valid_fn
 
 
 def train(config):

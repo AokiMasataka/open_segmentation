@@ -1,6 +1,6 @@
 from torch import nn
 from torchvision.models import resnet
-from open_seg.backbones._base import BackboneBase
+from ._base import BackboneBase
 from open_seg.builder import BACKBONES
 
 

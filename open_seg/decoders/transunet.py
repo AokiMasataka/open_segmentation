@@ -1,8 +1,8 @@
 from torch import nn
 import timm
 from timm.models.layers import trunc_normal_
-from open_seg.decoders._base import DecoderBase, DECODER_BLOCK
 
+from ._base import DecoderBase, DECODER_BLOCK
 from open_seg.builder import DECODERS
 
 
