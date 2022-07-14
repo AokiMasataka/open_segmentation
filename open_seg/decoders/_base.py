@@ -151,7 +151,6 @@ class DecoderCbamBlock(nn.Module):
     def forward(self, inputs):
         x = functional.relu(self.bn1(inputs))
         x = functional.interpolate(x, scale_factor=2, mode='nearest')
-        # x = self.upsample(x)
         x = self.conv3x3_1(x)
         x = self.conv3x3_2(functional.relu(self.bn2(x)))
         x = self.cbam(x)

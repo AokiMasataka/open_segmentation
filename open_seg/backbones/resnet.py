@@ -36,41 +36,41 @@ class ResNet(BackboneBase):
 
 @BACKBONES.register_module
 def resnet18(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnet18(weights=pretrained)
+    model = resnet.resnet18(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnet34(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnet34(weights=pretrained)
+    model = resnet.resnet34(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnet50(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnet50(weights=pretrained)
+    model = resnet.resnet50(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnet101(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnet101(weights=pretrained)
+    model = resnet.resnet101(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnet152(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnet152(weights=pretrained)
+    model = resnet.resnet152(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnext50_32x4d(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnext50_32x4d(weights=pretrained)
+    model = resnet.resnext50_32x4d(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 
 @BACKBONES.register_module
 def resnext101_32x8d(pretrained=None, n_blocks=5, init_config=None):
-    model = resnet.resnext101_32x8d(weights=pretrained)
+    model = resnet.resnext101_32x8d(pretrained=pretrained)
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)

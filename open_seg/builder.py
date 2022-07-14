@@ -58,6 +58,7 @@ def build_losses(config):
 def build_optimizer(config):
     return OPTIMIZER.build(config)
 
+
 def build_scheduler(config):
     if config['T_max'] == 'total_step':
         config['T_max'] = config['total_step']
@@ -71,7 +72,7 @@ def build_pipeline(config, mode='train_pipeline'):
 
 def build_model(config):
     backbone = build_backbone(config['backbone'])
-    config['decoder']['encoder_channels'] = backbone.out_channels
+    config['decoder']['encoder_channels'] = backbone.out_channels()
     decoder = build_decoder(config['decoder'])
     losses = build_losses(config['loss'])
     module = SEGMENTER.get_module(config['segmenter']['type'])

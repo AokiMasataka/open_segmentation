@@ -50,7 +50,7 @@ class LoadImageFromFile:
 
 @PIPELINES.register_module
 class LoadAnnotations:
-    def __init__(self, from_rel=False, color_type='color'):
+    def __init__(self, from_rel=False, color_type='unchanged'):
         self.from_rel = from_rel
         if color_type == 'color':
             self.load_option = cv2.IMREAD_COLOR

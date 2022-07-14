@@ -1,3 +1,5 @@
+import math
+import torch
 from torch import nn
 import timm
 from timm.models.layers import trunc_normal_
@@ -17,6 +19,13 @@ class TransUnet(DecoderBase):
 		encoder_channels = list(encoder_channels)
 		decoder_channels = list(decoder_channels)
 
+		self.transformer = Transformer(
+			model_name=transformer_name,
+			image_size=transformer_image_size,
+			input_dim=encoder_channels[-1]
+		)
+
+		encoder_channels = [*encoder_channels, self.transformer.embed_dim]
 		encoder_channels.reverse()
 		# computing blocks input and output channels
 		head_channels = encoder_channels[0]
@@ -31,17 +40,10 @@ class TransUnet(DecoderBase):
 		]
 		self.blocks = nn.ModuleList(blocks)
 		# transformer name: 'vit_base_patch16_384'
-		self.transformer = Transformer(
-			model_name=transformer_name,
-			image_size=transformer_image_size,
-			input_dim=encoder_channels[0]
-		)
 
 	def forward(self, features):
-		x = features.pop()
 		features.reverse()
-
-		x = self.transformer(x)
+		x = self.transformer(features[0])
 
 		for decoder_block, feature in zip(self.blocks, features):
 			x = decoder_block(x=x, skip=feature)
@@ -54,7 +56,7 @@ class TransUnet(DecoderBase):
 
 
 class Transformer(nn.Module):
-	def __init__(self, model_name, input_dim, image_size, patch_size=1):
+	def __init__(self, model_name, input_dim, image_size, patch_size=2):
 		super(Transformer, self).__init__()
 		_base = timm.create_model(model_name=model_name, pretrained=True)
 		patch_size_t2 = (patch_size, patch_size)
@@ -66,26 +68,17 @@ class Transformer(nn.Module):
 		self.pos_drop = _base.pos_drop
 		self.blocks = _base.blocks
 		self.norm = _base.norm
+		self.embed_dim = _base.embed_dim
 
 		trunc_normal_(self.pos_embed, std=0.02)
 	
 	def forward(self, hidden_state):
-		hidden_state = hidden_state.flatten(2).transpose(1, 2)
 		hidden_state = self.patch_embed(hidden_state)
+		hidden_state = hidden_state.flatten(2).transpose(1, 2)
 
 		hidden_state = self.pos_drop(hidden_state + self.pos_embed)
 		hidden_state = self.blocks(hidden_state)
 		hidden_state = self.norm(hidden_state)
+		seq = int(math.sqrt(hidden_state.shape[1]))
+		hidden_state = hidden_state.transpose(1, 2).view(-1, self.embed_dim, seq, seq)
 		return hidden_state
-
-
-if __name__ == '__main__':
-	import torch
-
-	_feat = torch.rand(2, 3, 24, 24)
-	_model = Transformer(model_name='vit_base_patch16_384', input_dim=3, image_size=24)
-
-	with torch.no_grad():
-		_feat = _model(_feat)
-
-	print(_feat.shape)

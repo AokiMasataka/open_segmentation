@@ -1,6 +1,6 @@
 import io
 import os
-from setuptools import find_packages, setup
+from setuptools import setup
 from open_seg import __version__
 
 
@@ -10,14 +10,30 @@ URL = 'git@github.com:AokiMasataka/open_segment.git'
 EMAIL = None
 AUTHOR = None
 REQUIRES_PYTHON = '>=3.9.0'
-VERSION = None
+VERSION = __version__
 
-REQUIRED = ['torch', 'torchvision', 'timm', 'tqdm']
-EXTRAS = {}
+INSTALL_REQUIRES = ['torch', 'torchvision', 'timm', 'tqdm']
+EXTRAS_REQUIRE = {}
+PACKAGES = ['open_seg']
+
+CLASSIFIERS = [
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: BSD License',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3 :: Only',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Visualization',
+    'Topic :: Scientific/Engineering :: Artificial Intelligence',
+    'Topic :: Multimedia :: Graphics',
+    'Framework :: Matplotlib',
+]
 
 
 here = os.path.abspath(os.path.dirname(__file__))
-
 try:
     with io.open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
         long_description = '\n' + f.read()
@@ -25,13 +41,9 @@ except FileNotFoundError:
     long_description = DESCRIPTION
 
 
-about = {}
-about['__version__'] = __version__
-
-
 setup(
     name=NAME,
-    version=about['__version__'],
+    version=VERSION,
     description=DESCRIPTION,
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -39,20 +51,10 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=find_packages(exclude=['open_seg']),
-    install_requires=REQUIRED,
-    extras_require=EXTRAS,
+    packages=PACKAGES,
+    install_requires=INSTALL_REQUIRES,
+    extras_require=EXTRAS_REQUIRE,
     include_package_data=True,
     license='MIT',
-    classifiers=[
-        # Trove classifiers
-        # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy'
-    ],
-    # $ setup.py publish support.
+    classifiers=CLASSIFIERS
 )

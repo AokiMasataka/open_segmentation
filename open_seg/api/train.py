@@ -1,6 +1,8 @@
 import os
 import sys
+import time
 from copy import deepcopy
+
 import torch
 from torch.cuda import amp
 from torch.utils.data import DataLoader
@@ -11,7 +13,51 @@ from open_seg import builder
 from .valid import valid_fn
 
 
-def train(config):
+class DummyScheduler:
+    def __init__(self):
+        pass
+
+    def step(self):
+        pass
+
+
+class IterLoader:
+    def __init__(self, dataloader):
+        self._dataloader = dataloader
+        self.iter_loader = iter(self._dataloader)
+        self._epoch = 0
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch
+
+    def __next__(self):
+        try:
+            data = next(self.iter_loader)
+        except StopIteration:
+            self._epoch += 1
+            if hasattr(self._dataloader.sampler, 'set_epoch'):
+                self._dataloader.sampler.set_epoch(self._epoch)
+            time.sleep(2)  # Prevent possible deadlock during epoch transition
+            self.iter_loader = iter(self._dataloader)
+            data = next(self.iter_loader)
+        return data
+
+
+def train_one_step(model, optimizer, lr_scheduler, batch, scaler, fp16):
+    images, labels = batch['image'].cuda(), batch['label'].cuda()
+    optimizer.zero_grad()
+    with amp.autocast(enabled=fp16):
+        loss, losses = model.forward_train(image=images, label=labels)
+    scaler.scale(loss).backward()
+    scaler.step(optimizer)
+    scaler.update()
+
+    lr_scheduler.step()
+    return loss, losses
+
+
+def trainner(config):
     seed_everything(config['train_config'].get('seed', 0))
     logger = get_logger(log_file=config['work_dir'] + '/train.log', stream=True)
 
@@ -34,6 +80,7 @@ def train(config):
         pin_memory=True,
         collate_fn=train_collate_fn
     )
+    train_iter_laoder = IterLoader(dataloader=train_laoder)
 
     logger.info('successful build datasets')
 
@@ -45,10 +92,14 @@ def train(config):
     optimizer_config['model'] = model
     optimizer = builder.build_optimizer(config=optimizer_config)
 
-    scheduler_config = config['scheduler']
-    scheduler_config['optimizer'] = optimizer
-    scheduler_config['total_step'] = config['train_config'].get('max_iters', 50000)
-    lr_scheduler = builder.build_scheduler(config=scheduler_config)
+    scheduler_config = config.get('scheduler', None)
+
+    if scheduler_config is not None:
+        scheduler_config['optimizer'] = optimizer
+        scheduler_config['total_step'] = config['train_config'].get('max_iters', 50000)
+        lr_scheduler = builder.build_scheduler(config=scheduler_config)
+    else:
+        lr_scheduler = DummyScheduler()
 
     logger.info('successful build optimizer')
 
@@ -74,77 +125,59 @@ def train(config):
         lr_scheduler.load_state_dict(cpt['lr_scheduler'])
         start_step = cpt['step']
     else:
-        start_step = 0
+        start_step = 1
 
     fp16 = train_config.get('fp16', False)
     logger.info(f'use amp: {fp16}')
     scaler = amp.GradScaler(enabled=fp16)
 
-    step = start_step
-    while True:
-        for batch in train_laoder:
-            step += 1
-            image, label = batch['image'].cuda(), batch['label'].cuda()
-            optimizer.zero_grad()
+    for step in range(start_step, max_iters + 1):
+        batch = train_iter_laoder.__next__()
+        loss, losses = train_one_step(
+            model=model, optimizer=optimizer, lr_scheduler=lr_scheduler, batch=batch, scaler=scaler, fp16=fp16
+        )
 
-            with amp.autocast(enabled=fp16):
-                loss, losses = model.forward_train(image=image, label=label)
+        mean_train_loss += loss.item()
+        for key in losses.keys():
+            loss_dict[key] += losses[key].item()
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        if step % log_interval == 0:
+            loss_log = ''
+            for key, value in zip(loss_dict.keys(), loss_dict.values()):
+                loss_log += f' - {key}: {value / log_interval:.6f}'
+            loss_log += f' - loss: {mean_train_loss / log_interval:.6f}'
 
-            lr_scheduler.step()
+            last_lr = lr_scheduler.get_last_lr()
+            lr_log = f' - lr: {last_lr:.6f}'
 
-            mean_train_loss += loss.item()
-            for key in losses.keys():
-                loss_dict[key] += losses[key].item()
+            logger.info(f'step: [{step}/{max_iters}]{lr_log}{loss_log}')
+            mean_train_loss = 0.0
+            loss_dict = {key: 0.0 for key in model.losses.keys()}
 
-            if (step % eval_interval == 0 and step % log_interval == 0) or step % eval_interval == 0:
-                if valid_dataset is not None:
-                    model.eval()
-                    valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
-                    logger.info(f'iter: [{step}] - dice score: {valid_score:.6f}')
-                    if best_score < valid_score:
-                        best_score = valid_score
-                        best_state = deepcopy(model.state_dict())
-                    model.train()
-                else:
-                    if (mean_train_loss / log_interval) < best_loss:
-                        best_loss = mean_train_loss / log_interval
-                        best_score = 0.0
-                        best_state = deepcopy(model.state_dict())
+        if step % eval_interval == 0:
+            if valid_dataset is not None:
+                model.eval()
+                valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
+                logger.info(f'iter: [{step}] - dice score: {valid_score:.6f}')
+                if best_score < valid_score:
+                    best_score = valid_score
+                    best_state = deepcopy(model.state_dict())
+                model.train()
+            else:
+                if (mean_train_loss / log_interval) < best_loss:
+                    best_loss = mean_train_loss / log_interval
+                    best_score = 0.0
+                    best_state = deepcopy(model.state_dict())
 
-                mean_train_loss = 0.0
-                loss_dict = {key: 0.0 for key in model.losses.keys()}
-
-                if save_checkpoint:
-                    os.makedirs(f'{save_dir}/checkpoint/', exist_ok=True)
-                    cpt = {
-                        'model': deepcopy(model.state_dict()),
-                        'optimizer': deepcopy(optimizer.state_dict()),
-                        'lr_scheduler': deepcopy(lr_scheduler.state_dict()),
-                        'step': step
-                    }
-                    torch.save(cpt, f'{save_dir}/checkpoint/step{step}.cpt')
-
-            elif step % log_interval == 0:
-                loss_log = ''
-                for key, value in zip(loss_dict.keys(), loss_dict.values()):
-                    loss_log += f' - {key}: {value / log_interval:.6f}'
-                loss_log += f' - loss: {mean_train_loss / log_interval:.6f}'
-
-                last_lr = lr_scheduler.get_last_lr()
-                lr_log = f' - lr: {last_lr:.6f}'
-
-                logger.info(f'step: [{step}/{max_iters}]{lr_log}{loss_log}')
-                mean_train_loss = 0.0
-                loss_dict = {key: 0.0 for key in model.losses.keys()}
-
-            if step == max_iters:
-                break
-        if step == max_iters:
-            break
+            if save_checkpoint:
+                os.makedirs(f'{save_dir}/checkpoint/', exist_ok=True)
+                cpt = {
+                    'model': deepcopy(model.state_dict()),
+                    'optimizer': deepcopy(optimizer.state_dict()),
+                    'lr_scheduler': deepcopy(lr_scheduler.state_dict()),
+                    'step': step
+                }
+                torch.save(cpt, f'{save_dir}/checkpoint/step{step}.cpt')
 
     logger.info(f'Best loss: {best_loss:.6f}')
     logger.info(f'Best score: {best_score:.6f}')
