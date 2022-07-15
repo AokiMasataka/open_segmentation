@@ -50,7 +50,8 @@ class LoadImageFromFile:
 
 @PIPELINES.register_module
 class LoadAnnotations:
-    def __init__(self, from_rel=False, color_type='unchanged'):
+    def __init__(self, num_classes, from_rel=False, color_type='unchanged'):
+        self.num_classes = num_classes
         self.from_rel = from_rel
         if color_type == 'color':
             self.load_option = cv2.IMREAD_COLOR
@@ -67,4 +68,16 @@ class LoadAnnotations:
             label_file = results['label_path']
             label = cv2.imread(label_file, self.load_option)
             results['label'] = label
+        
+        if 1 < self.num_classes:
+            results['label'] = self._to_one_hot(results['label'])
         return results
+    
+    def _to_one_hot(self, label):
+        one_hot_label = []
+        for i in range(1, self.num_classes + 1):
+            one_hot_label.append(label == i)
+        
+        one_hot_label = np.stack(one_hot_label, axis=2)
+        one_hot_label = one_hot_label.astype(np.uint8)
+        return one_hot_label
