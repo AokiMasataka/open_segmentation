@@ -1,2 +1,2 @@
 from .inference import InferenceSegmenter
-from .train import train
+from .train import trainner

@@ -2,6 +2,7 @@ import os
 import sys
 import time
 from copy import deepcopy
+import itertools
 
 import torch
 from torch.cuda import amp
@@ -38,10 +39,23 @@ class IterLoader:
             self._epoch += 1
             if hasattr(self._dataloader.sampler, 'set_epoch'):
                 self._dataloader.sampler.set_epoch(self._epoch)
-            time.sleep(2)  # Prevent possible deadlock during epoch transition
+            time.sleep(0.5)  # Prevent possible deadlock during epoch transition
             self.iter_loader = iter(self._dataloader)
             data = next(self.iter_loader)
         return data
+
+
+class InfiniteSampler:
+    def __init__(self, dataset_size):
+        self.dataset_size = dataset_size
+        self.generator = torch.Generator(device='cpu')
+
+    def __iter__(self):
+        yield from itertools.islice(self._infinite(), 0, None, 1)
+
+    def _infinite(self):
+        while True:
+            yield from torch.randperm(self.dataset_size, generator=self.generator)
 
 
 def train_one_step(model, optimizer, lr_scheduler, batch, scaler, fp16):
@@ -75,12 +89,12 @@ def trainner(config):
     train_laoder = DataLoader(
         dataset=train_dataset,
         batch_size=data_config['batch_size'],
+        sampler=InfiniteSampler(dataset_size=train_dataset.__len__()),
         num_workers=data_config.get('num_workers', os.cpu_count()),
-        shuffle=True,
         pin_memory=True,
         collate_fn=train_collate_fn
     )
-    train_iter_laoder = IterLoader(dataloader=train_laoder)
+    # train_iter_laoder = IterLoader(dataloader=train_laoder)
 
     logger.info('successful build datasets')
 
@@ -130,9 +144,7 @@ def trainner(config):
     fp16 = train_config.get('fp16', False)
     logger.info(f'use amp: {fp16}')
     scaler = amp.GradScaler(enabled=fp16)
-
-    for step in range(start_step, max_iters + 1):
-        batch = train_iter_laoder.__next__()
+    for step, batch in zip(range(start_step, max_iters + 1), train_laoder):
         loss, losses = train_one_step(
             model=model, optimizer=optimizer, lr_scheduler=lr_scheduler, batch=batch, scaler=scaler, fp16=fp16
         )
@@ -148,7 +160,7 @@ def trainner(config):
             loss_log += f' - loss: {mean_train_loss / log_interval:.6f}'
 
             last_lr = lr_scheduler.get_last_lr()
-            lr_log = f' - lr: {last_lr:.6f}'
+            lr_log = f' - lr: {last_lr[0]:.6f}'
 
             logger.info(f'step: [{step}/{max_iters}]{lr_log}{loss_log}')
             mean_train_loss = 0.0

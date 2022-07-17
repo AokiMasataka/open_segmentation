@@ -3,7 +3,7 @@ model = dict(
         type='EncoderDecoder',
         num_classes=10,
     ),
-    backbones=dict(
+    backbone=dict(
         type='resnet50',
         pretrained=True,
         n_blocks=5,

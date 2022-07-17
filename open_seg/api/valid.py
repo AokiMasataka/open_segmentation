@@ -22,7 +22,7 @@ def valid_one_step(model, dataset, index, threshold=0.5):
     augmented_results = batch['meta']
 
     with torch.cuda.amp.autocast():
-        logits = model(image)
+        logits = model.forward_inference(image)
 
     predict = dataset.pipeline.transforms['TestTimeAugment'].post_process(
         logits=logits, augmented_results=augmented_results

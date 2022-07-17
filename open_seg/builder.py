@@ -75,8 +75,14 @@ def build_model(config):
     config['decoder']['encoder_channels'] = backbone.out_channels()
     decoder = build_decoder(config['decoder'])
     losses = build_losses(config['loss'])
-    module = SEGMENTER.get_module(config['segmenter']['type'])
-    model = module(backbone=backbone, decoder=decoder, losses=losses, num_classes=config['segmenter']['num_classes'])
+    segmenter_module = SEGMENTER.get_module(config['segmenter']['type'])
+    model = segmenter_module(
+        backbone=backbone,
+        decoder=decoder,
+        losses=losses,
+        num_classes=config['num_classes'],
+        test_config=config['test_config']
+    )
     init_config = config.get('init_config', None)
     if init_config is not None:
         model.load_state_dict(torch.load(init_config['weight_path']))

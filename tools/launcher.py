@@ -1,7 +1,7 @@
 import os
 import sys
 import warnings
-from open_seg.api import train
+from open_seg.api.train import trainner
 
 
 def load_config_file(path):
@@ -20,7 +20,7 @@ def main():
     with open(config['work_dir'] + '/config.py', 'w') as f:
         f.write(text)
 
-    train(config=config)
+    trainner(config=config)
 
 
 if __name__ == '__main__':
