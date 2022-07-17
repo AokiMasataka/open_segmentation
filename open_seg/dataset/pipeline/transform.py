@@ -68,18 +68,24 @@ class Resize:
             if 'label' in results:
                 results['label'] = self._reisze_retio(results['label'])
         else:
-            results['image'] = cv2.resize(results['image'], dsize=self.new_size)
+            results['image'] = cv2.resize(results['image'], dsize=(self.new_size, self.new_size))
             if 'label' in results:
-                results['label'] = cv2.resize(results['label'], dsize=self.new_size)
+                results['label'] = cv2.resize(results['label'], dsize=(self.new_size, self.new_size))
+                if results['label'].ndim == 2:
+                    results['label'] = np.expand_dims(a=results['label'], axis=2)
         return results
 
     def _reisze_retio(self, image):
-        height, width = image.shape[:2]
+        height, width, = image.shape[:2]
         retio = self.new_size / max(height, width)
 
         new_h = int(height * retio)
         new_w = int(width * retio)
-        return cv2.resize(image, dsize=(new_w, new_h))
+        image = cv2.resize(image, dsize=(new_w, new_h))
+
+        if image.ndim == 2:
+            image = np.expand_dims(a=image, axis=2)
+        return image
 
 
 @PIPELINES.register_module
@@ -143,14 +149,29 @@ class RemovePad:
 
 
 @PIPELINES.register_module
+class RandomCrop:
+    def __init__(self, crop_size):
+        self.crop_size = crop_size
+
+    def __call__(self, results):
+        size = results['image'].shape[0]
+        crop_x, crop_y = np.random.randint(low=0, high=size - self.crop_size, size=2, dtype=np.int32)
+
+        results['image'] = results['image'][crop_x: crop_x + self.crop_size, crop_y: crop_y + self.crop_size, :]
+        if 'label' in results:
+            results['label'] = results['label'][crop_x: crop_x + self.crop_size, crop_y: crop_y + self.crop_size, :]
+        return results
+
+
+@PIPELINES.register_module
 class FlipHorizontal:
     def __init__(self):
         self.FLIP_HIRIZONTAL = 1
 
     def __call__(self, results):
-        results['image'] = cv2.flip(results['image'], self.FLIP_HIRIZONTAL)
+        results['image'] = results['image'][:, ::-1]
         if 'label' in results:
-            results['label'] = cv2.flip(results['label'], self.FLIP_HIRIZONTAL)
+            results['label'] = results['label'][:, ::-1]
         return results
 
 
@@ -160,9 +181,9 @@ class FlipVertical:
         self.FLIP_VERTICAL = 0
 
     def __call__(self, results):
-        results['image'] = cv2.flip(results['image'], self.FLIP_VERTICAL)
+        results['image'] = results['image'][::-1, :]
         if 'label' in results:
-            results['label'] = cv2.flip(results['label'], self.FLIP_VERTICAL)
+            results['label'] = results['label'][::-1, :]
         return results
 
 
@@ -175,10 +196,9 @@ class RandomFlipHorizontal:
 
     def __call__(self, results):
         if np.random.random() < self.prob:
-            results['image'] = cv2.flip(results['image'], self.FLIP_HIRIZONTAL)
+            results['image'] = results['image'][:, ::-1]
             if 'label' in results:
-                results['label'] = cv2.flip(results['label'], self.FLIP_HIRIZONTAL)
-
+                results['label'] = results['label'][:, ::-1]
         return results
 
 
@@ -191,9 +211,9 @@ class RandomFlipVertical:
 
     def __call__(self, results):
         if np.random.random() < self.prob:
-            results['image'] = cv2.flip(results['image'], self.FLIP_VERTICAL)
+            results['image'] = results['image'][::-1, :]
             if 'label' in results:
-                results['label'] = cv2.flip(results['label'], self.FLIP_VERTICAL)
+                results['label'] = results['label'][::-1, :]
 
         return results
 

@@ -31,7 +31,32 @@ class LoadImageFromFile:
             image = cv2.imread(image_file, cv2.IMREAD_UNCHANGED)
         else:
             image = cv2.cvtColor(cv2.imread(image_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-        assert image is not None
+        assert image is not None, f'empty file: {image_file}'
+
+        if self.to_float:
+            image = image.astype(np.float32)
+
+        if self.max_value == 'max':
+            image = image / np.max(image)
+
+        if self.force_3chan:
+            image = np.stack([image for _ in range(3)], -1)
+
+        results['image'] = image
+        results['original_shape'] = (image.shape[1], image.shape[0])
+        results['scale_factor'] = 1.0
+        return results
+
+
+@PIPELINES.register_module
+class LoadNumpyImage:
+    def __init__(self, to_float=False, max_value=None, force_3chan=False):
+        self.to_float = to_float
+        self.max_value = max_value
+        self.force_3chan = force_3chan
+
+    def __call__(self, results):
+        image = np.load(file=results['image_path'])
 
         if self.to_float:
             image = image.astype(np.float32)
@@ -50,7 +75,7 @@ class LoadImageFromFile:
 
 @PIPELINES.register_module
 class LoadAnnotations:
-    def __init__(self, num_classes, from_rel=False, color_type='unchanged'):
+    def __init__(self, num_classes=1, from_rel=False, color_type='unchanged'):
         self.num_classes = num_classes
         self.from_rel = from_rel
         if color_type == 'color':
@@ -70,7 +95,9 @@ class LoadAnnotations:
             results['label'] = label
         
         if 1 < self.num_classes:
-            results['label'] = self._to_one_hot(results['label'])
+            results['label'] = self._to_one_hot(label=results['label'])
+        else:
+            results['label'] = np.expand_dims(a=results['label'], axis=-1)
         return results
     
     def _to_one_hot(self, label):

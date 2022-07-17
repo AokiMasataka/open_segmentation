@@ -1,18 +1,18 @@
 from copy import deepcopy
 import torch
-from .pipeline.loading import LoadAnnotations
 from open_seg.losses import dice_metric
 
 
 class SegmentData(torch.utils.data.Dataset):
-    def __init__(self, split, data_root, image_dir, label_dir, suffix, test_mode=False):
+    def __init__(self, split, data_root, image_dir, label_dir, image_suffix, label_suffix, test_mode=False):
         self.split_file = data_root + '/' + split
         self.image_dir = data_root + '/' + image_dir
         self.laebl_dir = data_root + '/' + label_dir
-        self.suffix = suffix
+        self.image_suffix = image_suffix
+        self.label_suffix = label_suffix
         self.test_mode = test_mode
         self.pipeline = None
-        self.gt_seg_map_loader = LoadAnnotations()
+        self.gt_seg_map_loader = None
 
         self._load_annotation()
 
@@ -35,20 +35,21 @@ class SegmentData(torch.utils.data.Dataset):
             if split == '':
                 continue
             ant_data = {
-                'image_path': f'{self.image_dir}/{split}{self.suffix}',
-                'label_path': f'{self.laebl_dir}/{split}{self.suffix}'
+                'image_path': f'{self.image_dir}/{split}{self.image_suffix}',
+                'label_path': f'{self.laebl_dir}/{split}{self.label_suffix}'
             }
             self.ant_data_list.append(ant_data)
 
     def get_pipeline(self, pipeline):
         self.pipeline = pipeline
+        self.gt_seg_map_loader = pipeline.transforms['LoadAnnotations']
 
     def pre_eval(self, pred, index):
         assert pred.ndim == 3
         item = self.ant_data_list[index]
         results = self.gt_seg_map_loader(item)
         label = results['label']
-        dice_score = dice_metric(pred, label, eps=1e-6)
+        dice_score = dice_metric(pred=pred, label=label, smooth=1.0)
         return dice_score
 
 
