@@ -170,7 +170,7 @@ def trainner(config):
             if valid_dataset is not None:
                 model.eval()
                 valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
-                logger.info(f'iter: [{step}] - dice score: {valid_score:.6f}')
+                logger.info(f'step: [{step}/{max_iters}] - dice score: {valid_score:.6f}')
                 if best_score < valid_score:
                     best_score = valid_score
                     best_state = deepcopy(model.state_dict())

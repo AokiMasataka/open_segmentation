@@ -1,5 +1,7 @@
 import os
 import logging
+from typing import Sequence
+
 import numpy
 import torch
 from torch import nn
@@ -71,7 +73,7 @@ def init_weight(m):
         if m.bias is not None:
             m.bias.data.zero_()
     elif classname.find('Batch') != -1:
-        m.weight.data.normal_(1,0.02)
+        m.weight.data.normal_(1, 0.02)
         m.bias.data.zero_()
     elif classname.find('Linear') != -1:
         nn.init.orthogonal_(m.weight, gain=1)
@@ -79,3 +81,26 @@ def init_weight(m):
             m.bias.data.zero_()
     elif classname.find('Embedding') != -1:
         nn.init.orthogonal_(m.weight, gain=1)
+
+
+def to_tuple(param, low=None, bias=None):
+    if low is not None and bias is not None:
+        raise ValueError("Arguments low and bias are mutually exclusive")
+
+    if param is None:
+        return param
+
+    if isinstance(param, (int, float)):
+        if low is None:
+            param = -param, +param
+        else:
+            param = (low, param) if low < param else (param, low)
+    elif isinstance(param, Sequence):
+        param = tuple(param)
+    else:
+        raise ValueError("Argument param must be either scalar (int, float) or tuple")
+
+    if bias is not None:
+        return tuple(bias + x for x in param)
+
+    return tuple(param)

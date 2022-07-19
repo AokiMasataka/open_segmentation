@@ -6,6 +6,7 @@ from open_seg.builder import PIPELINES
 
 __all__ = [
     'LoadImageFromFile',
+    'LoadNumpyImage',
     'LoadAnnotations',
 ]
 

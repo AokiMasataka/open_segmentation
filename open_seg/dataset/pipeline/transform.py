@@ -1,5 +1,4 @@
 import copy
-import math
 import cv2
 import numpy as np
 import torch
@@ -9,6 +8,7 @@ try:
 except:
     pass
 
+from open_seg.utils import to_tuple
 from open_seg.builder import PIPELINES
 
 __all__ = [
@@ -19,7 +19,8 @@ __all__ = [
     'RandomFlipHorizontal',
     'FlipHorizontal',
     'RandomFlipVertical',
-    'FlipVertical'
+    'FlipVertical',
+    'ShiftScaleRotateShear',
 ]
 
 
@@ -97,6 +98,13 @@ class Padding:
 
     def __call__(self, results):
         height, width, ch = results['image'].shape
+
+        if self.size == height == width:
+            results['pad_t'] = 0
+            results['pad_b'] = 0
+            results['pad_l'] = 0
+            results['pad_r'] = 0
+            return results
 
         top, bottom, left, right = self._create_pad(height=height, width=width)
         results['pad_t'] = top
@@ -219,68 +227,83 @@ class RandomFlipVertical:
 
 
 @PIPELINES.register_module
-class RandomPerspective:
-    def __init__(self, degrees=0, translate=0.0, scale=0.0, shear=1, perspective=0.0, center=4):
-        assert 0.0 <= translate <= 1.0
-        assert 0.0 <= scale <= 1.0
-        self.degrees = degrees
-        self.translate = translate
-        if not isinstance(scale, (list, tuple)):
-            self.scale = (scale, scale)
+class ShiftScaleRotateShear:
+    def __init__(
+            self,
+            shift_limit=0.0625,
+            scale_limit=0.1,
+            rotate_limit=45,
+            interpolation=cv2.INTER_LINEAR,
+            border_mode=cv2.BORDER_REFLECT_101,
+            value=None,
+            mask_value=None,
+            shift_limit_x=None,
+            shift_limit_y=None,
+            shear=0.0,
+            prob=0.5
+    ):
+        self.shift_limit_x = to_tuple(shift_limit_x if shift_limit_x is not None else shift_limit)
+        self.shift_limit_y = to_tuple(shift_limit_y if shift_limit_y is not None else shift_limit)
+        self.scale_limit = to_tuple(scale_limit, bias=1.0)
+        self.rotate_limit = to_tuple(rotate_limit)
+        self.interpolation = interpolation
+        self.border_mode = border_mode
+        self.value = value
+        self.mask_value = mask_value
         self.shear = shear
-        self.perspective = perspective
-        self.center = center
+        self.prob = prob
 
     def __call__(self, results):
-        shape = results['image'].shape
-        matrix = self._get_affine_matrix(shape)
+        angle = np.random.uniform(self.rotate_limit[0], self.rotate_limit[1])
+        scale = np.random.uniform(self.scale_limit[0], self.scale_limit[1])
+        shfit_x = np.random.uniform(self.shift_limit_x[0], self.shift_limit_x[1])
+        shift_y = np.random.uniform(self.shift_limit_y[0], self.shift_limit_y[1])
+        shear_x = np.random.uniform(-self.shear, self.shear)
+        shear_y = np.random.uniform(-self.shear, self.shear)
 
-        if self.perspective:
-            results['image'] = cv2.warpPerspective(
-                results['image'], matrix, dsize=(shape[1], shape[0]), borderValue=(0, 0, 0)
+        image_shape = results['image'].shape
+        _matrix = self._get_matrix(
+            image_shape=image_shape,
+            angle=angle,
+            scale=scale,
+            shfit_x=shfit_x,
+            shfit_y=shift_y,
+            shear_x=shear_x,
+            shear_y=shear_y
+        )
+
+        results['image'] = cv2.warpAffine(
+            src=results['image'],
+            M=_matrix,
+            dsize=(image_shape[1], image_shape[0]),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0
+        )
+        if 'label' in results:
+            results['label'] = cv2.warpAffine(
+                src=results['label'],
+                M=_matrix,
+                dsize=(image_shape[1], image_shape[0]),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0
             )
 
-            if 'label' in results:
-                results['label'] = cv2.warpPerspective(
-                    results['label'], matrix, dsize=(shape[1], shape[0]), borderValue=(0, 0, 0)
-                )
-
-        else:
-            results['image'] = cv2.warpAffine(
-                results['image'], matrix[:2], dsize=(shape[1], shape[0]), borderValue=(0, 0, 0)
-            )
-
-            if 'label' in results:
-                results['label'] = cv2.warpAffine(
-                    results['label'], matrix, dsize=(shape[1], shape[0]), borderValue=(0, 0, 0)
-                )
         return results
 
-    def _get_affine_matrix(self, image_shape):
-        center = np.eye(3, 3)
-        center[0, 2] = -image_shape[1] / center
-        center[1, 2] = -image_shape[0] / center
+    def _get_matrix(self, image_shape, angle, scale, shfit_x, shfit_y, shear_x, shear_y):
+        height, width = image_shape[:2]
+        center = (width / 2, height / 2)
+        rot_matrix = cv2.getRotationMatrix2D(center, angle, scale)
+        rot_matrix[0, 2] += shfit_x * width
+        rot_matrix[1, 2] += shfit_y * height
 
-        perspective = np.eye(3, 3)
-        perspective[2, 0] = np.random.uniform(-perspective, perspective)
-        perspective[2, 1] = np.random.uniform(-perspective, perspective)
+        shear_matrix = np.eye(3, 3)
+        shear_matrix[0, 1] = shear_x
+        shear_matrix[1, 0] = shear_y
 
-        rotation = np.eye(3, 3)
-        angle = np.random.uniform(-self.degrees, self.degrees)
-        scale = np.random.uniform(1 - self.scale[0], 1 + self.scale[1])
-        rotation[:2] = cv2.getRotationMatrix2D(angle=angle, center=(0, 0), scale=scale)
-
-        shear = np.eye(3, 3)
-        shear[0, 1] = math.tan(np.random.uniform(-shear, shear) * math.pi / 180)
-        shear[1, 0] = math.tan(np.random.uniform(-shear, shear) * math.pi / 180)
-
-        translation = np.eye(3, 3)
-        translation[0, 2] = np.random.uniform(0.5 - self.translate, 0.5 + self.translate) * image_shape[1]
-        translation[1, 2] = np.random.uniform(0.5 - self.translate, 0.5 + self.translate) * image_shape[0]
-
-        # order of operations (right to left) is IMPORTANT
-        matrix = center @ perspective @ rotation @ shear @ translation
-        return matrix
+        return rot_matrix @ shear_matrix
 
 
 @PIPELINES.register_module
@@ -351,38 +374,6 @@ class Album:
             args['transforms'] = [self.albu_builder(transform) for transform in args['transforms']]
 
         return obj_cls(**args)
-
-    @staticmethod
-    def mapper(d, keymap):
-        """Dictionary mapper. Renames keys according to keymap provided.
-
-        Args:
-            d (dict): old dict
-            keymap (dict): {'old_key':'new_key'}
-        Returns:
-            dict: new dict.
-        """
-
-        updated_dict = {}
-        for k, v in zip(d.keys(), d.values()):
-            new_k = keymap.get(k, k)
-            updated_dict[new_k] = d[k]
-        return updated_dict
-
-    def a__call__(self, results):
-        # dict to albumentations format
-        res = copy.deepcopy(results)
-        seg_keys = results.get('seg_fields', [])
-        masks = []
-        for key in seg_keys:
-            masks.append(results[key])
-
-        augged = self.aug(image=results['img'], masks=masks)
-        results['img'] = augged['image']
-        for i, key in enumerate(seg_keys):
-            results[key] = augged['masks'][i]
-
-        return results
 
     def __call__(self, results):
         augged = self.aug(image=results['image'], mask=results['label'])

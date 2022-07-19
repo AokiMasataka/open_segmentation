@@ -35,7 +35,7 @@ class TestTimeAugment:
         self.flip_fn = FlipHorizontal()
         self.resizes = []
         for scale in scales:
-            if scale == -1 or scale == input_size:
+            if scale == -1:
                 self.resizes.append(Identity())
             else:
                 self.resizes.append(Resize(size=scale, keep_retio=keep_retio))
@@ -88,6 +88,7 @@ class TestTimeAugment:
 
             if original_shape != result['image'].shape[:2]:
                 result['image'] = cv2.resize(src=result['image'], dsize=original_shape, interpolation=cv2.INTER_CUBIC)
+                result['image'] = np.expand_dims(a=result['image'], axis=2)
             predict_list.append(result['image'])
 
         return sum(predict_list) / predict_list.__len__()
@@ -114,7 +115,7 @@ if __name__ == '__main__':
         )
 
         results = {'image': image, 'original_shape': (image.shape[1], image.shape[0])}
-        tta = TestTimeAugmentPost(input_size=512, scales=scales, flips=flips, keep_retio=True)
+        tta = TestTimeAugment(input_size=512, scales=scales, flips=flips, keep_retio=True)
 
         batch = tta.pre_process(results=results)
         images = batch['image']

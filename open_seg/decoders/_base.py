@@ -67,10 +67,10 @@ class DecoderBasicBlock(nn.Module):
 
 
 class DecoderBottleneckBlock(nn.Module):
-    def __init__(self, in_channels, skip_channels, out_channels, scale_factor=2, mode='nearest'):
+    def __init__(self, in_channels, out_channels, scale_factor=2, mode='nearest'):
         super(DecoderBottleneckBlock, self).__init__()
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels + skip_channels, out_channels // 2, kernel_size=(1, 1), padding=(0, 0), bias=False),
+            nn.Conv2d(in_channels, out_channels // 2, kernel_size=(1, 1), padding=(0, 0), bias=False),
             nn.BatchNorm2d(out_channels // 2),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels // 2, out_channels // 2, kernel_size=(3, 3), padding=(1, 1), bias=False),
@@ -139,26 +139,51 @@ class CBAM(nn.Module):
 
 
 class DecoderCbamBlock(nn.Module):
-    def __init__(self, in_channel, out_channel):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.bn1 = nn.BatchNorm2d(in_channel).apply(init_weight)
-        self.conv3x3_1 = conv3x3(in_channel=in_channel, out_channel=in_channel).apply(init_weight)
-        self.bn2 = nn.BatchNorm2d(in_channel).apply(init_weight)
-        self.conv3x3_2 = conv3x3(in_channel=in_channel, out_channel=out_channel).apply(init_weight)
-        self.cbam = CBAM(in_channel=out_channel, reduction=16)
-        self.conv1x1 = conv1x1(in_channel=in_channel, out_channel=out_channel).apply(init_weight)
+        self.bn1 = nn.BatchNorm2d(in_channels).apply(init_weight)
+        self.conv3x3_1 = conv3x3(in_channel=in_channels, out_channel=in_channels).apply(init_weight)
+        self.bn2 = nn.BatchNorm2d(in_channels).apply(init_weight)
+        self.conv3x3_2 = conv3x3(in_channel=in_channels, out_channel=out_channels).apply(init_weight)
+        self.cbam = CBAM(in_channel=out_channels, reduction=16)
+        self.conv1x1 = conv1x1(in_channel=in_channels, out_channel=out_channels).apply(init_weight)
 
     def forward(self, inputs):
-        x = functional.relu(self.bn1(inputs))
-        x = functional.interpolate(x, scale_factor=2, mode='nearest')
-        x = self.conv3x3_1(x)
+        inputs = functional.relu(self.bn1(inputs))
+        inputs = functional.interpolate(inputs, scale_factor=2, mode='nearest')
+        x = self.conv3x3_1(inputs)
         x = self.conv3x3_2(functional.relu(self.bn2(x)))
         x = self.cbam(x)
-        return x + self.conv1x1(functional.interpolate(inputs, scale_factor=2, mode='nearest'))  # shortcut
+        # return x + self.conv1x1(functional.interpolate(inputs, scale_factor=2, mode='nearest'))
+        return x + self.conv1x1(inputs)
+
+
+class DecoderBasicCbamBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, scale_factor=2, mode='nearest'):
+        super().__init__()
+        self.block = nn.Sequential(
+            conv3x3(in_channel=in_channels, out_channel=out_channels),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            conv3x3(in_channel=out_channels, out_channel=out_channels),
+            CBAM(in_channel=out_channels, reduction=16),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+        self.scale_factor = scale_factor
+        self.mode = mode
+
+    def forward(self, x, skip=None):
+        x = functional.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
+        if skip is not None:
+            x = torch.cat(tensors=(x, skip), dim=1)
+        x = self.block(x)
+        return x
 
 
 DECODER_BLOCK = {
     'basic': DecoderBasicBlock,
+    'basic_cbm': DecoderBasicCbamBlock,
     'bottleneck': DecoderBottleneckBlock,
     'cbam': DecoderCbamBlock
 }
