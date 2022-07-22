@@ -87,3 +87,21 @@ def build_model(config):
     if init_config is not None:
         model.load_state_dict(torch.load(init_config['weight_path']))
     return model
+
+
+def build_test_model(config):
+    backbone = build_backbone(config['backbone'])
+    config['decoder']['encoder_channels'] = backbone.out_channels()
+    decoder = build_decoder(config['decoder'])
+    segmenter_module = SEGMENTER.get_module(config['segmenter']['type'])
+    model = segmenter_module(
+        backbone=backbone,
+        decoder=decoder,
+        losses=None,
+        num_classes=config['num_classes'],
+        test_config=config['test_config']
+    )
+    init_config = config.get('init_config', None)
+    if init_config is not None:
+        model.load_state_dict(torch.load(init_config['weight_path']))
+    return model

@@ -171,7 +171,7 @@ def trainner(config):
                 model.eval()
                 valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
                 logger.info(f'step: [{step}/{max_iters}] - dice score: {valid_score:.6f}')
-                if best_score < valid_score:
+                if valid_score < best_score:
                     best_score = valid_score
                     best_state = deepcopy(model.state_dict())
                 model.train()
@@ -193,5 +193,5 @@ def trainner(config):
 
     logger.info(f'Best loss: {best_loss:.6f}')
     logger.info(f'Best score: {best_score:.6f}')
-    torch.save(best_state, f'{save_dir}/best_loss.pth')
-    torch.save(model.state_dict(), f'{save_dir}/last.pth')
+    torch.save(best_state, f'{save_dir}/checkpoint/best_loss.pth')
+    torch.save(model.state_dict(), f'{save_dir}/checkpoint/last.pth')
