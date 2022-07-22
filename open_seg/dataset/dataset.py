@@ -4,7 +4,18 @@ from open_seg.losses import dice_metric
 
 
 class SegmentData(torch.utils.data.Dataset):
-    def __init__(self, split, data_root, image_dir, label_dir, image_suffix, label_suffix, test_mode=False):
+    def __init__(
+            self,
+            split,
+            data_root,
+            image_dir,
+            label_dir,
+            image_suffix='.png',
+            label_suffix='.png',
+            cache_image=False,
+            cache_label=False,
+            test_mode=False
+    ):
         self.split_file = data_root + '/' + split
         self.image_dir = data_root + '/' + image_dir
         self.laebl_dir = data_root + '/' + label_dir
@@ -15,6 +26,9 @@ class SegmentData(torch.utils.data.Dataset):
         self.gt_seg_map_loader = None
 
         self._load_annotation()
+
+        self.cache_image = cache_image
+        self.cache_label = cache_label
 
     def __len__(self):
         return self.ant_data_list.__len__()
@@ -40,9 +54,29 @@ class SegmentData(torch.utils.data.Dataset):
             }
             self.ant_data_list.append(ant_data)
 
+    def _cache_images(self):
+        for index in range(self.ant_data_list.__len__()):
+            self.ant_data_list[index] = self.pipeline['LoadImageFromFile'](self.ant_data_list[index])
+
+        if 'LoadImageFromFile' in self.pipeline.transforms.keys():
+            del self.pipeline.transforms['LoadImageFromFile']
+
+    def _cache_labels(self):
+        for index in range(self.ant_data_list.__len__()):
+            self.ant_data_list[index] = self.gt_seg_map_loader(self.ant_data_list[index])
+
+        if 'LoadAnnotations' in self.pipeline.transforms.keys():
+            del self.pipeline.transforms['LoadAnnotations']
+
     def get_pipeline(self, pipeline):
         self.pipeline = pipeline
         self.gt_seg_map_loader = pipeline.transforms['LoadAnnotations']
+
+        if self.cache_image:
+            self._cache_images()
+
+        if self.cache_label:
+            self._cache_labels()
 
     def pre_eval(self, pred, index):
         assert pred.ndim == 3

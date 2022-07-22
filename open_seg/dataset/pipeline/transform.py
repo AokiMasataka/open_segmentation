@@ -59,9 +59,10 @@ class Compose:
 
 @PIPELINES.register_module
 class Resize:
-    def __init__(self, size, keep_retio=True):
+    def __init__(self, size, keep_retio=True, interpolation=''):
         self.new_size = size
         self.keep_retio = keep_retio
+        self.interpolation = interpolation
 
     def __call__(self, results):
         if self.keep_retio:
@@ -168,6 +169,28 @@ class RandomCrop:
         results['image'] = results['image'][crop_x: crop_x + self.crop_size, crop_y: crop_y + self.crop_size, :]
         if 'label' in results:
             results['label'] = results['label'][crop_x: crop_x + self.crop_size, crop_y: crop_y + self.crop_size, :]
+        return results
+
+
+@PIPELINES.register_module
+class RandomResizeCrop:
+    def __init__(self, min_crop_size, max_crop_size, size):
+        self.min_crop_size = min_crop_size
+        self.max_crop_size = max_crop_size
+        self.size = size
+
+    def __call__(self, results):
+        size = results['image'].shape[0]
+        crop_size = np.random.randint(low=self.min_crop_size, high=self.max_crop_size)
+        crop_x, crop_y = np.random.randint(low=0, high=size - crop_size, size=2, dtype=np.int32)
+
+        results['image'] = results['image'][crop_x: crop_x + crop_size, crop_y: crop_y + crop_size, :]
+        results['image'] = cv2.resize(results['image'], dsize=(self.size, self.size))
+        if 'label' in results:
+            results['label'] = results['label'][crop_x: crop_x + crop_size, crop_y: crop_y + crop_size, :]
+            results['label'] = cv2.resize(results['label'], dsize=(self.size, self.size))
+            if results['label'].ndim == 2:
+                results['label'] = np.expand_dims(a=results['label'], axis=2)
         return results
 
 

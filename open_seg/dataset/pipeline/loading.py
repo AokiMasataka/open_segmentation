@@ -88,8 +88,9 @@ class LoadAnnotations:
 
     def __call__(self, results):
         if self.from_rel:
-            # TODO rel to mask
-            pass
+            with open(results['rle_path'], 'r') as f:
+                rle = f.read()
+            results['label'] = self.rle2mask(mask_rle=rle, shape=results['origin_shape'])
         else:
             label_file = results['label_path']
             label = cv2.imread(label_file, self.load_option)
@@ -109,3 +110,14 @@ class LoadAnnotations:
         one_hot_label = np.stack(one_hot_label, axis=2)
         one_hot_label = one_hot_label.astype(np.uint8)
         return one_hot_label
+
+    @staticmethod
+    def rle2mask(mask_rle, shape):
+        s = mask_rle.split()
+        starts, lengths = [np.asarray(x, dtype=int) for x in (s[0:][::2], s[1:][::2])]
+        starts -= 1
+        ends = starts + lengths
+        image = np.zeros(shape[0] * shape[1], dtype=np.uint8)
+        for lo, hi in zip(starts, ends):
+            image[lo:hi] = 1
+        return image.reshape(shape).T
