@@ -1,2 +1,2 @@
 from ._base import SegmentationHead
-from .encoder_decoder import EncoderDecoder
+from .encoder_decoder import EncoderDecoder, EncoderDecoderDeepVision

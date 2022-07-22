@@ -1,3 +1,3 @@
-from .unet import Unet
+from .unet import Unet, UnetDeepVision
 from .transunet import TransUnet
-from .unet_hypercolumns import UnetHypercolum
+from .unet_hypercolumns import UnetHypercolum, UnetHypercolumDeepSupervision

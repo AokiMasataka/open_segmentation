@@ -9,7 +9,7 @@ from torch.nn import functional
 from open_seg.utils import conv3x3, conv1x1, init_weight
 
 
-__all__ = ['DecoderBase', 'DecoderBasicBlock', 'DecoderBottleneckBlock', 'DecoderCbamBlock', 'DECODER_BLOCK']
+__all__ = ['DecoderBase', 'DecoderBasicBlock', 'DecoderBottleneckBlock', 'DECODER_BLOCK']
 
 
 class DecoderBase(torch.nn.Module, metaclass=ABCMeta):
@@ -17,6 +17,7 @@ class DecoderBase(torch.nn.Module, metaclass=ABCMeta):
         super().__init__()
         self._is_init = False
         self.init_config = deepcopy(init_config)
+        self.deep_supervision = False
 
         if self.init_config is not None:
             self.load_weight()
@@ -138,26 +139,6 @@ class CBAM(nn.Module):
         return x
 
 
-class DecoderCbamBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.bn1 = nn.BatchNorm2d(in_channels).apply(init_weight)
-        self.conv3x3_1 = conv3x3(in_channel=in_channels, out_channel=in_channels).apply(init_weight)
-        self.bn2 = nn.BatchNorm2d(in_channels).apply(init_weight)
-        self.conv3x3_2 = conv3x3(in_channel=in_channels, out_channel=out_channels).apply(init_weight)
-        self.cbam = CBAM(in_channel=out_channels, reduction=16)
-        self.conv1x1 = conv1x1(in_channel=in_channels, out_channel=out_channels).apply(init_weight)
-
-    def forward(self, inputs):
-        inputs = functional.relu(self.bn1(inputs))
-        inputs = functional.interpolate(inputs, scale_factor=2, mode='nearest')
-        x = self.conv3x3_1(inputs)
-        x = self.conv3x3_2(functional.relu(self.bn2(x)))
-        x = self.cbam(x)
-        # return x + self.conv1x1(functional.interpolate(inputs, scale_factor=2, mode='nearest'))
-        return x + self.conv1x1(inputs)
-
-
 class DecoderBasicCbamBlock(nn.Module):
     def __init__(self, in_channels, out_channels, scale_factor=2, mode='nearest'):
         super().__init__()
@@ -185,5 +166,4 @@ DECODER_BLOCK = {
     'basic': DecoderBasicBlock,
     'basic_cbm': DecoderBasicCbamBlock,
     'bottleneck': DecoderBottleneckBlock,
-    'cbam': DecoderCbamBlock
 }
