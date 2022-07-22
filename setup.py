@@ -9,7 +9,7 @@ DESCRIPTION = 'sementic segmentation lib'
 URL = 'git@github.com:AokiMasataka/open_segment.git'
 EMAIL = None
 AUTHOR = None
-REQUIRES_PYTHON = '>=3.9.0'
+REQUIRES_PYTHON = '>=3.7.0'
 VERSION = __version__
 
 INSTALL_REQUIRES = ['torch', 'torchvision', 'timm', 'tqdm']
