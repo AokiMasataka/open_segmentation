@@ -1,8 +1,9 @@
 from torch import nn
 from torch.nn import functional
 
-from ._base import DecoderBase, DECODER_BLOCK, conv1x1
+from ._base import DecoderBase, DECODER_BLOCK, ASPP
 from open_seg.builder import DECODERS
+from open_seg.utils import conv1x1
 
 
 @DECODERS.register_module
@@ -19,8 +20,9 @@ class Unet(DecoderBase):
         decoder_channels = list(decoder_channels)
         encoder_channels.reverse()
 
-        head_channels = encoder_channels[0]
-        in_channels = [head_channels] + decoder_channels[:-1]
+        in_channels = [encoder_channels[0]] + decoder_channels[:-1]
+        aspp_in = in_channels[0]
+        in_channels[0] = 512
         skip_channels = encoder_channels[1:] + [0]
         out_channels = decoder_channels
         in_channels = [in_ch + skip_ch for in_ch, skip_ch in zip(in_channels, skip_channels)]
@@ -28,9 +30,10 @@ class Unet(DecoderBase):
         block = DECODER_BLOCK[block_type]
         blocks = [block(in_ch, out_ch) for in_ch, out_ch in zip(in_channels, out_channels)]
         self.blocks = nn.ModuleList(blocks)
+        self.aspp = ASPP(in_channels=aspp_in, mid_channels=256, out_channels=512, dilations=(1, 2, 3, 4))
 
     def forward(self, features):
-        x = features.pop()
+        x = self.aspp(features.pop())
         features.reverse()
 
         for decoder_block, feature in zip(self.blocks, features):
@@ -57,8 +60,9 @@ class UnetDeepVision(DecoderBase):
         decoder_channels = list(decoder_channels)
         encoder_channels.reverse()
 
-        head_channels = encoder_channels[0]
-        in_channels = [head_channels] + decoder_channels[:-1]
+        in_channels = [encoder_channels[0]] + decoder_channels[:-1]
+        aspp_in = in_channels[0]
+        in_channels[0] = 512
         skip_channels = encoder_channels[1:] + [0]
         out_channels = decoder_channels
         in_channels = [in_ch + skip_ch for in_ch, skip_ch in zip(in_channels, skip_channels)]
@@ -66,11 +70,12 @@ class UnetDeepVision(DecoderBase):
         block = DECODER_BLOCK[block_type]
         blocks = [block(in_ch, out_ch) for in_ch, out_ch in zip(in_channels, out_channels)]
         self.blocks = nn.ModuleList(blocks)
+        self.aspp = ASPP(in_channels=aspp_in, mid_channels=256, out_channels=512, dilations=(1, 2, 3, 4))
 
         self.deep_supervision_blocks = nn.ModuleList([conv1x1(in_ch, 1) for in_ch in out_channels[::-1][1:]])
 
     def forward(self, features):
-        x = features.pop()
+        x = self.aspp(features.pop())
         features.reverse()
 
         deepsupervision = []

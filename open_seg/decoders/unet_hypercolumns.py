@@ -31,20 +31,30 @@ class UnetHypercolum(DecoderBase):
         blocks = [block(in_ch, out_ch) for in_ch, out_ch in zip(in_channels, out_channels)]
         self.blocks = nn.ModuleList(blocks)
         self.scales = [2 ** i for i in range(1, n_blocks)][::-1]
+        self.fpn = nn.ModuleList([
+            nn.Sequential(
+                conv3x3(in_channel=in_ch, out_channel=out_ch * 2),
+                nn.ReLU(inplace=True),
+                nn.BatchNorm2d(out_ch * 2),
+                conv3x3(in_channel=out_ch * 2, out_channel=out_ch)
+            ) for in_ch, out_ch in zip(decoder_channels[:-1], [16] * (decoder_channels.__len__() - 1))
+        ])
+        self._decoder_out_dim = sum([16] * (decoder_channels.__len__() - 1) + [decoder_channels[-1]])
 
     def forward(self, features):
         x = features.pop()
         features.reverse()
 
         hypercolums = []
-        for feature, decoder_block, scale in zip(features, self.blocks, self.scales):
+        for feature, decoder_block, scale, fpn in zip(features, self.blocks, self.scales, self.fpn):
             x = decoder_block(x=x, skip=feature)
-            hypercolums.append(functional.interpolate(x, scale_factor=scale, mode='bilinear', align_corners=False))
+            hypercolums.append(fpn(functional.interpolate(x, scale_factor=scale, mode='bilinear', align_corners=False)))
+
         hypercolums.append(self.blocks[-1](x=x))
         return torch.cat(hypercolums, dim=1)
 
     def decoder_out_dim(self):
-        return self._decoder_channels[-1]
+        return self._decoder_out_dim
 
 
 @DECODERS.register_module

@@ -1,7 +1,7 @@
 from ._base import SegmenterBase, SegmentationHead
 from open_seg.builder import SEGMENTER
+from open_seg.losses import DeepSuperVisionLoss
 from open_seg.utils import force_fp32
-from open_seg.losses import lovasz_hinge_non_empty
 
 
 @SEGMENTER.register_module
@@ -60,6 +60,7 @@ class EncoderDecoderDeepVision(SegmenterBase):
         self.backbone = backbone
         self.decoder = decoder
         self.losses = losses
+        self._deep_duper_vision_loss = DeepSuperVisionLoss(symmetric=True, loss_weight=0.1)
 
         self.seg_head = SegmentationHead(
             in_channels=self.decoder.decoder_out_dim(),
@@ -95,11 +96,6 @@ class EncoderDecoderDeepVision(SegmenterBase):
         for loss_name, loss_fn in zip(self.losses.keys(), self.losses.values()):
             losses[loss_name] = loss_fn(logit, label)
 
-        losses['deep_vision'] = self._deep_vivison_loss(deep_visions=deep_logits, label=label)
+        losses['deep_vision'] = self._deep_duper_vision_loss(deep_visions=deep_logits, label=label)
         loss = sum(losses.values())
         return loss, losses
-
-    @force_fp32
-    def _deep_vivison_loss(self, deep_visions, label):
-        loss = sum([0.1 * lovasz_hinge_non_empty(logits_deep=logits_deep, label=label) for logits_deep in deep_visions])
-        return loss

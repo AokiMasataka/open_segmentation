@@ -135,9 +135,9 @@ def trainner(config):
     if checkpoint:
         cpt = torch.load(checkpoint)
         model.load_state_dict(cpt['model'])
-        optimizer.load_state_dict(cpt['optimizer'])
+        # optimizer.load_state_dict(cpt['optimizer'])
         lr_scheduler.load_state_dict(cpt['lr_scheduler'])
-        start_step = cpt['step']
+        start_step = cpt['step'] + 1
     else:
         start_step = 1
 
@@ -171,7 +171,7 @@ def trainner(config):
                 model.eval()
                 valid_score = valid_fn(model=model, dataset=valid_dataset, threshold=threshold)
                 logger.info(f'step: [{step}/{max_iters}] - dice score: {valid_score:.6f}')
-                if valid_score < best_score:
+                if best_score < valid_score:
                     best_score = valid_score
                     best_state = deepcopy(model.state_dict())
                 model.train()
