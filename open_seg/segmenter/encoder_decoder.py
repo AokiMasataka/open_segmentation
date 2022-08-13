@@ -6,8 +6,23 @@ from open_seg.utils import force_fp32
 
 @SEGMENTER.register_module
 class EncoderDecoder(SegmenterBase):
-    def __init__(self, backbone, decoder, losses, num_classes=1, head_hidden_rate=1.0, test_config=None, init_config=None):
-        super(EncoderDecoder, self).__init__(num_classes=num_classes, test_config=test_config, init_config=init_config)
+    def __init__(
+            self,
+            backbone,
+            decoder,
+            losses,
+            num_classes=1,
+            head_hidden_rate=1.0,
+            test_config=None,
+            init_config=None,
+            norm_config=None
+    ):
+        super(EncoderDecoder, self).__init__(
+            num_classes=num_classes,
+            test_config=test_config,
+            init_config=init_config,
+            norm_config=norm_config
+        )
         self.backbone = backbone
         self.decoder = decoder
         self.losses = losses
@@ -18,7 +33,10 @@ class EncoderDecoder(SegmenterBase):
             hidden_rate=head_hidden_rate
         )
 
+        self.init()
+
     def forward(self, image):
+        image = self.norm_fn(image=image)
         decode_out = self.decoder(self.backbone(image))
         return self.seg_head(decode_out)
 
@@ -28,8 +46,7 @@ class EncoderDecoder(SegmenterBase):
         return loss, losses
 
     def forward_test(self, image, label):
-        decode_out = self.decoder(self.backbone(image))
-        logit = self.seg_head(decode_out)
+        logit = self(image)
         loss, _ = self._get_loss(logit, label)
         return {'loss': loss, 'logit': logit}
 
@@ -50,11 +67,22 @@ class EncoderDecoder(SegmenterBase):
 
 @SEGMENTER.register_module
 class EncoderDecoderDeepVision(SegmenterBase):
-    def __int__(self, backbone, decoder, losses, num_classes=1, head_hidden_rate=1.0, test_config=None, init_config=None):
-        super(EncoderDecoderDeepVision, self).__int__(
+    def __init__(
+            self,
+            backbone,
+            decoder,
+            losses,
+            num_classes=1,
+            head_hidden_rate=1.0,
+            test_config=None,
+            init_config=None,
+            norm_config=None
+    ):
+        super(EncoderDecoderDeepVision, self).__init__(
             num_classes=num_classes,
             test_config=test_config,
-            init_config=init_config
+            init_config=init_config,
+            norm_config=norm_config
         )
 
         self.backbone = backbone

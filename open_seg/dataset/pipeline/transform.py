@@ -12,7 +12,9 @@ from open_seg.utils import to_tuple
 from open_seg.builder import PIPELINES
 
 __all__ = [
+    'IdentityTransform',
     'Compose',
+    'Normalize',
     'Resize',
     'Padding',
     'RemovePad',
@@ -22,6 +24,15 @@ __all__ = [
     'FlipVertical',
     'ShiftScaleRotateShear',
 ]
+
+
+@PIPELINES.register_module
+class IdentityTransform:
+    def __init__(self):
+        pass
+
+    def __call__(self, results):
+        return results
 
 
 @PIPELINES.register_module
@@ -58,6 +69,41 @@ class Compose:
 
 
 @PIPELINES.register_module
+class ToFloat:
+    def __call__(self, results):
+        results['image'] = results['image'].astype(np.float32) / 255.0
+        return results
+
+
+@PIPELINES.register_module
+class ToByte:
+    def __init__(self, dtype='byte'):
+        assert dtype in ('byte', 'float')
+        if dtype == 'byte':
+            self.dtype = np.uint8
+        elif dtype == 'float':
+            self.dtype = np.float32
+
+    def __call__(self, results):
+        results['image'] = (results['image'] * 255).astype(self.dtype)
+        return results
+
+
+@PIPELINES.register_module
+class Normalize:
+    def __init__(self, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, results):
+        results['image'] = self._norm(results['image'])
+        return results
+
+    def _norm(self, image):
+        return (image.astype(np.float32) / 255.0 - self.mean) / self.std
+
+
+@PIPELINES.register_module
 class Resize:
     def __init__(self, size, keep_retio=True, interpolation=''):
         self.new_size = size
@@ -73,8 +119,6 @@ class Resize:
             results['image'] = cv2.resize(results['image'], dsize=(self.new_size, self.new_size))
             if 'label' in results:
                 results['label'] = cv2.resize(results['label'], dsize=(self.new_size, self.new_size))
-                if results['label'].ndim == 2:
-                    results['label'] = np.expand_dims(a=results['label'], axis=2)
         return results
 
     def _reisze_retio(self, image):
@@ -123,7 +167,7 @@ class Padding:
         if 'label' in results:
             results['label'] = np.pad(
                 array=results['label'],
-                pad_width=((top, bottom), (left, right), (0, 0)),
+                pad_width=((top, bottom), (left, right)),
                 mode='constant',
                 constant_values=self.label_pad_value
             )
@@ -189,8 +233,6 @@ class RandomResizeCrop:
         if 'label' in results:
             results['label'] = results['label'][crop_x: crop_x + crop_size, crop_y: crop_y + crop_size, :]
             results['label'] = cv2.resize(results['label'], dsize=(self.size, self.size))
-            if results['label'].ndim == 2:
-                results['label'] = np.expand_dims(a=results['label'], axis=2)
         return results
 
 
@@ -327,6 +369,43 @@ class ShiftScaleRotateShear:
         shear_matrix[1, 0] = shear_y
 
         return rot_matrix @ shear_matrix
+
+
+@PIPELINES.register_module
+class RandomHSV:
+    def __init__(self, hsv=(0.15, 0.25, 0.25), prob=1.0):
+        self.hsv = hsv
+        self.prob = prob
+
+    def __call__(self, results):
+        if np.random.random() < self.prob:
+            return self._random_hsv(results=results)
+        else:
+            return results
+
+    def _random_hsv(self, results):
+        if results['image'].dtype == np.float32:
+            image = (results['image'] * 255).astype(np.uint8)
+            float_type = True
+        else:
+            image = results['image']
+            float_type = False
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        h = hsv[:, :, 0].astype(np.float32)  # hue
+        s = hsv[:, :, 1].astype(np.float32)  # saturation
+        v = hsv[:, :, 2].astype(np.float32)  # value
+        h = (h * (1 + np.random.uniform(-1, 1) * self.hsv[0])) % 180
+        s = s * (1 + np.random.uniform(-1, 1) * self.hsv[1])
+        v = v * (1 + np.random.uniform(-1, 1) * self.hsv[2])
+
+        hsv[:, :, 0] = np.clip(h, 0, 180).astype(np.uint8)
+        hsv[:, :, 1] = np.clip(s, 0, 255).astype(np.uint8)
+        hsv[:, :, 2] = np.clip(v, 0, 255).astype(np.uint8)
+        results['image'] = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        if float_type:
+            results['image'] = results['image'].astype(np.float32) / 255.0
+        return results
 
 
 @PIPELINES.register_module

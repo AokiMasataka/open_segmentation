@@ -1,7 +1,6 @@
 model = dict(
     segmenter=dict(
         type='EncoderDecoder',
-        num_classes=10,
     ),
     backbone=dict(
         type='resnet50',
@@ -15,7 +14,11 @@ model = dict(
         n_blocks=5,
         block_type='basic'
     ),
-    loss=[dict(type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.75)]
+    loss=[dict(type='CrossEntropyLoss', mode='bce', label_smooth=0.01, loss_weight=1.0)],
+    init_config=None,
+    test_config=dict(mode='mode'),
+    norm_config=dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    num_classes=10
 )
 
 total_step = 60_000
@@ -48,10 +51,10 @@ train_pipeline = [
 ]
 
 
-test_pipeline=[
+test_pipeline = [
     dict(type='LoadImageFromFile', to_float=True, color_type='anydepth', max_value='max', force_3chan=False),
     dict(type='LoadAnnotations'),
-    dict(type='TestTimeAugment', scales=(320, 320, 288, 288), flips=(False, True, False, True), size=image_size)
+    dict(type='TestTimeAugment', scales=(320, 320, 288, 288), flips=(False, True, False, True), input_size=image_size)
 ]
 
 
@@ -64,14 +67,16 @@ data = dict(
         split='train/split',
         image_dir='image_dir',
         label_dir='label_dir',
-        suffix='.png'
+        image_suffix='.png',
+        label_suffix='.png'
     ),
     valid=dict(
         data_root=data_root,
         split='valid/split',
         image_dir='image_dir',
         label_dir='label_dir',
-        suffix='.png'
+        image_suffix='.png',
+        label_suffix='.png'
     )
 )
 
@@ -81,8 +86,10 @@ train_config = dict(
     max_iters=total_step,
     eval_interval=10_000,
     log_interval=1_000,
+    save_checkpoint=True,
     fp16=True,
-    threshold=0.5
+    threshold=0.5,
+    checkpoint=False
 )
 
 work_dir = f'./work_dir'

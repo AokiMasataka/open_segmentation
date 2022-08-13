@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 from copy import deepcopy
 import itertools
 
@@ -20,29 +19,6 @@ class DummyScheduler:
 
     def step(self):
         pass
-
-
-class IterLoader:
-    def __init__(self, dataloader):
-        self._dataloader = dataloader
-        self.iter_loader = iter(self._dataloader)
-        self._epoch = 0
-
-    @property
-    def epoch(self) -> int:
-        return self._epoch
-
-    def __next__(self):
-        try:
-            data = next(self.iter_loader)
-        except StopIteration:
-            self._epoch += 1
-            if hasattr(self._dataloader.sampler, 'set_epoch'):
-                self._dataloader.sampler.set_epoch(self._epoch)
-            time.sleep(0.5)  # Prevent possible deadlock during epoch transition
-            self.iter_loader = iter(self._dataloader)
-            data = next(self.iter_loader)
-        return data
 
 
 class InfiniteSampler:
@@ -94,7 +70,6 @@ def trainner(config):
         pin_memory=True,
         collate_fn=train_collate_fn
     )
-    # train_iter_laoder = IterLoader(dataloader=train_laoder)
 
     logger.info('successful build datasets')
 
@@ -125,6 +100,7 @@ def trainner(config):
     threshold = train_config.get('threshold', 0.5)
     checkpoint = train_config.get('checkpoint', False)
     save_dir = config['work_dir']
+    weight_name = train_config.get('weight_name', '')
 
     best_loss = float('Inf')
     best_score = -float('Inf')
@@ -132,10 +108,11 @@ def trainner(config):
     mean_train_loss = 0.0
     loss_dict = {key: 0.0 for key in model.losses.keys()}
 
+    os.makedirs(f'{save_dir}/checkpoint/', exist_ok=True)
     if checkpoint:
         cpt = torch.load(checkpoint)
         model.load_state_dict(cpt['model'])
-        # optimizer.load_state_dict(cpt['optimizer'])
+        optimizer.load_state_dict(cpt['optimizer'])
         lr_scheduler.load_state_dict(cpt['lr_scheduler'])
         start_step = cpt['step'] + 1
     else:
@@ -182,16 +159,15 @@ def trainner(config):
                     best_state = deepcopy(model.state_dict())
 
             if save_checkpoint:
-                os.makedirs(f'{save_dir}/checkpoint/', exist_ok=True)
                 cpt = {
                     'model': deepcopy(model.state_dict()),
                     'optimizer': deepcopy(optimizer.state_dict()),
                     'lr_scheduler': deepcopy(lr_scheduler.state_dict()),
                     'step': step
                 }
-                torch.save(cpt, f'{save_dir}/checkpoint/step{step}.cpt')
+                torch.save(cpt, f'{save_dir}/checkpoint/step{step}{weight_name}.cpt')
 
-    logger.info(f'Best loss: {best_loss:.6f}')
+    # logger.info(f'Best loss: {best_loss:.6f}')
     logger.info(f'Best score: {best_score:.6f}')
-    torch.save(best_state, f'{save_dir}/checkpoint/best_loss.pth')
-    torch.save(model.state_dict(), f'{save_dir}/checkpoint/last.pth')
+    torch.save(best_state, f'{save_dir}/checkpoint/best_score{weight_name}.pth')
+    torch.save(model.state_dict(), f'{save_dir}/checkpoint/last{weight_name}.pth')

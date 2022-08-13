@@ -1,6 +1,6 @@
 import io
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 from open_seg import __version__
 
 
@@ -51,7 +51,7 @@ setup(
     author_email=EMAIL,
     python_requires=REQUIRES_PYTHON,
     url=URL,
-    packages=PACKAGES,
+    packages=find_packages(),
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
     include_package_data=True,

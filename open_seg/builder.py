@@ -1,4 +1,4 @@
-import torch
+from copy import deepcopy
 
 
 class Registry:
@@ -21,7 +21,7 @@ class Registry:
 
     def build(self, config):
         if isinstance(config, (list, tuple)):
-            return {conf['type']: self.build(config=conf) for conf in config}
+            return {conf['type']: self.build(config=deepcopy(conf)) for conf in config}
         else:
             _type = config.pop('type')
             module = self._module_dict[_type]
@@ -67,6 +67,7 @@ def build_scheduler(config):
 
 
 def build_pipeline(config, mode='train_pipeline'):
+    assert mode in ('train_pipeline', 'test_pipeline'), f'mode is train_pipeline or test_pipeline but got {mode}'
     return PIPELINES.build_pipline(config, mode=mode)
 
 
@@ -81,11 +82,10 @@ def build_model(config):
         decoder=decoder,
         losses=losses,
         num_classes=config['num_classes'],
-        test_config=config['test_config']
+        init_config=config.get('init_config', None),
+        test_config=config.get('test_config', None),
+        norm_config=config.get('norm_config', None)
     )
-    init_config = config.get('init_config', None)
-    if init_config is not None:
-        model.load_state_dict(torch.load(init_config['weight_path']))
     return model
 
 
@@ -99,9 +99,8 @@ def build_test_model(config):
         decoder=decoder,
         losses=None,
         num_classes=config['num_classes'],
-        test_config=config['test_config']
+        init_config=None,
+        test_config=config.get('test_config', None),
+        norm_config=config.get('norm_config', None)
     )
-    init_config = config.get('init_config', None)
-    if init_config is not None:
-        model.load_state_dict(torch.load(init_config['weight_path']))
     return model

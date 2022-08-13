@@ -48,7 +48,7 @@ class UnetHypercolum(DecoderBase):
         hypercolums = []
         for feature, decoder_block, scale, fpn in zip(features, self.blocks, self.scales, self.fpn):
             x = decoder_block(x=x, skip=feature)
-            hypercolums.append(fpn(functional.interpolate(x, scale_factor=scale, mode='bilinear', align_corners=False)))
+            hypercolums.append(functional.interpolate(fpn(x), scale_factor=scale, mode='bilinear', align_corners=False))
 
         hypercolums.append(self.blocks[-1](x=x))
         return torch.cat(hypercolums, dim=1)

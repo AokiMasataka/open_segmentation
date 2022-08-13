@@ -19,15 +19,15 @@ def valid_fn(model, dataset, threshold=0.5):
 def valid_one_step(model, dataset, index, threshold=0.5):
     batch = dataset.__getitem__(index)
     image = batch['image'].cuda()
-    augmented_results = batch['meta']
 
     with torch.cuda.amp.autocast():
         logits = model.forward_inference(image)
 
     predict = dataset.pipeline.transforms['TestTimeAugment'].post_process(
-        logits=logits, augmented_results=augmented_results
+        logits=logits, augmented_results=batch['meta']
     )
 
     predict = (threshold < predict).astype(np.float32)
+
     dice_score = dataset.pre_eval(pred=predict, index=index)
     return dice_score

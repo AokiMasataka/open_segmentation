@@ -1,23 +1,32 @@
 from copy import deepcopy
 from abc import ABCMeta, abstractmethod
 
-from torch.nn import functional
 import torch
+from torch.nn import functional
+
 from open_seg.utils import conv3x3, conv1x1, init_weight
 
 
 class SegmenterBase(torch.nn.Module, metaclass=ABCMeta):
-    def __init__(self, num_classes, test_config=None, init_config=None):
+    def __init__(self, num_classes, test_config=None, norm_config=None, init_config=None):
         super().__init__()
         self._is_init = False
+        self.test_config = deepcopy(test_config)
+        self.norm_config = deepcopy(norm_config)
         self.init_config = deepcopy(init_config)
-        self.test_config = test_config
-        self.num_classes = num_classes
 
-        if self.init_config is not None:
-            self.load_weight()
+        if self.norm_config is not None:
+            assert self.norm_config['mean'].__len__() == self.norm_config['std'].__len__()
+            ch = self.norm_config['mean'].__len__()
+            self.mean = torch.tensor(self.norm_config['mean'], dtype=torch.float).view(1, ch, 1, 1)
+            self.std = torch.tensor(self.norm_config['std'], dtype=torch.float).view(1, ch, 1, 1)
+            self.norm_fn = lambda image: (image / 255.0 - self.mean.to(image.device)) / self.std.to(image.device)
         else:
-            self.init_weight()
+            self.mean = None
+            self.std = None
+            self.norm_fn = lambda image: image
+
+        self.num_classes = num_classes
 
     @abstractmethod
     def forward_train(self, image, label):
@@ -26,6 +35,18 @@ class SegmenterBase(torch.nn.Module, metaclass=ABCMeta):
     @abstractmethod
     def forward_test(self, image, label):
         pass
+
+    def init(self):
+        if self.init_config is not None:
+            try:
+                self.load_weight()
+            except:
+                self.init_weight()
+        else:
+            self.init_weight()
+
+        if self.test_config is None:
+            self.test_config = dict(mode='whole')
 
     @property
     def is_init(self):

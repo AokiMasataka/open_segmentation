@@ -1,4 +1,5 @@
 import cv2
+from PIL import Image
 import numpy as np
 
 from open_seg.builder import PIPELINES
@@ -48,6 +49,24 @@ class LoadImageFromFile:
         results['scale_factor'] = 1.0
         return results
 
+    def __call__(self, results):
+        image = Image.open(fp=results['image_path'], mode='r', formats=None)
+        image = Image.fromarray(obj=image, mode=None)
+
+        if self.to_float:
+            image = image.astype(np.float32)
+
+            if self.max_value:
+                image /= np.max(image)
+
+        if self.force_3chan:
+            image = np.stack([image for _ in range(3)], -1)
+
+        results['image'] = image
+        results['original_shape'] = (image.shape[1], image.shape[0])
+        results['scale_factor'] = 1.0
+        return results
+
 
 @PIPELINES.register_module
 class LoadNumpyImage:
@@ -87,19 +106,16 @@ class LoadAnnotations:
             NotImplementedError('color_type is color or unchanged')
 
     def __call__(self, results):
+        if not ('label_path' in results or 'rle_path' in results):
+            return results
+
         if self.from_rel:
             with open(results['rle_path'], 'r') as f:
                 rle = f.read()
             results['label'] = self.rle2mask(mask_rle=rle, shape=results['origin_shape'])
         else:
             label_file = results['label_path']
-            label = cv2.imread(label_file, self.load_option)
-            results['label'] = label
-        
-        if 1 < self.num_classes:
-            results['label'] = self._to_one_hot(label=results['label'])
-        else:
-            results['label'] = np.expand_dims(a=results['label'], axis=-1)
+            results['label'] = cv2.imread(label_file, self.load_option)
         return results
     
     def _to_one_hot(self, label):

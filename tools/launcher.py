@@ -1,7 +1,7 @@
 import os
 import sys
 import warnings
-from open_seg.api.train import trainner
+from open_seg.api import trainner
 
 
 def load_config_file(path):
@@ -9,6 +9,13 @@ def load_config_file(path):
         text = f.read()
     config = dict()
     exec(text, globals(), config)
+
+    if '_base_' in config.keys():
+        for base_path in config['_base_']:
+            base_config, _ = load_config_file(path=base_path)
+            config = config | base_config
+
+    text = str(config)
     return config, text
 
 

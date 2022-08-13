@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torchvision.models import resnet
 from ._base import BackboneBase
@@ -9,7 +10,7 @@ class ResNet(BackboneBase):
         super(ResNet, self).__init__(init_config=init_config)
 
         blocks = [
-            nn.Sequential(model.conv1, model.bn1, model.relu),
+            nn.Sequential(model.conv1, model.bn1, nn.ReLU(inplace=True)),
             nn.Sequential(model.maxpool, *model.layer1),
             model.layer2,
             model.layer3,
@@ -67,6 +68,12 @@ def resnet152(pretrained=None, n_blocks=5, init_config=None):
 @BACKBONES.register_module
 def resnext50_32x4d(pretrained=None, n_blocks=5, init_config=None):
     model = resnet.resnext50_32x4d(pretrained=pretrained)
+    return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
+
+
+@BACKBONES.register_module
+def resnext50_32x4d_ssl(pretrained=None, n_blocks=5, init_config=None):
+    model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext50_32x4d_ssl')
     return ResNet(model=model, n_blocks=n_blocks, init_config=init_config)
 
 

@@ -3,16 +3,7 @@ import cv2
 import numpy as np
 import torch
 from open_seg.builder import PIPELINES
-from .transform import Resize, Padding, RemovePad, FlipHorizontal
-# from open_seg.dataset.pipeline.transform import Resize, Padding, RemovePad, FlipHorizontal
-
-
-class Identity:
-    def __init__(self):
-        pass
-
-    def __call__(self, results):
-        return results
+from .transform import Resize, Padding, RemovePad, FlipHorizontal, IdentityTransform
 
 
 @PIPELINES.register_module
@@ -36,7 +27,7 @@ class TestTimeAugment:
         self.resizes = []
         for scale in scales:
             if scale == -1:
-                self.resizes.append(Identity())
+                self.resizes.append(IdentityTransform())
             else:
                 self.resizes.append(Resize(size=scale, keep_retio=keep_retio))
 
@@ -70,7 +61,6 @@ class TestTimeAugment:
             augmented_images = np.stack(augmented_images, axis=0)
         augmented_images = augmented_images.transpose((0, 3, 1, 2))
         augmented_images = torch.tensor(augmented_images, dtype=torch.float)
-
         return {'image': augmented_images, 'meta': augmented_results}
 
     def post_process(self, logits, augmented_results):
@@ -92,37 +82,3 @@ class TestTimeAugment:
             predict_list.append(result['image'])
 
         return sum(predict_list) / predict_list.__len__()
-
-
-if __name__ == '__main__':
-    def main():
-        import numpy as np
-        import cv2
-        import matplotlib.pyplot as plt
-
-        scales = -1
-        flips = False
-        image = np.ones((512, 512, 3), dtype=np.uint8)
-        image = cv2.putText(
-            image,
-            text='sample text',
-            org=(20, 120),
-            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-            fontScale=1.0,
-            color=(0, 1, 0),
-            thickness=2,
-            lineType=cv2.LINE_4
-        )
-
-        results = {'image': image, 'original_shape': (image.shape[1], image.shape[0])}
-        tta = TestTimeAugment(input_size=512, scales=scales, flips=flips, keep_retio=True)
-
-        batch = tta.pre_process(results=results)
-        images = batch['image']
-        meta = batch['meta']
-
-        predict = tta.post_process(logits=images, augmented_results=meta)
-        plt.imshow(predict)
-        plt.show()
-
-    main()
