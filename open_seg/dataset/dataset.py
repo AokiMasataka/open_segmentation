@@ -8,8 +8,8 @@ class SegmentData(torch.utils.data.Dataset):
             self,
             split,
             data_root,
-            image_dir,
-            label_dir,
+            image_prefix,
+            label_prefix,
             image_suffix='.png',
             label_suffix='.png',
             cache_image=False,
@@ -17,8 +17,8 @@ class SegmentData(torch.utils.data.Dataset):
             test_mode=False
     ):
         self.split_file = data_root + '/' + split
-        self.image_dir = data_root + '/' + image_dir
-        self.laebl_dir = data_root + '/' + label_dir
+        self.image_dir = data_root + '/' + image_prefix
+        self.laebl_dir = data_root + '/' + label_prefix
         self.image_suffix = image_suffix
         self.label_suffix = label_suffix
         self.test_mode = test_mode
