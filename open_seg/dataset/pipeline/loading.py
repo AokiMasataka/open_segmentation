@@ -2,8 +2,7 @@ import cv2
 from PIL import Image
 import numpy as np
 
-from open_seg.builder import PIPELINES
-
+from ..builder import PIPELINES
 
 __all__ = [
     'LoadImageFromFile',
@@ -14,56 +13,38 @@ __all__ = [
 
 @PIPELINES.register_module
 class LoadImageFromFile:
-    def __init__(self, to_float=False, color_type='color', max_value=None, force_3chan=False):
+    def __init__(self, to_float=True, max_value=None, force_3chan=False, color_type='color', backend='cv2'):
+        assert color_type in ('color', 'anydepth', 'unchanged')
+        assert backend in ('cv2', 'pil', 'pillow')
+        color_types = {'color': cv2.IMREAD_COLOR, 'anydepth': cv2.IMREAD_ANYDEPTH, 'unchanged': cv2.IMREAD_UNCHANGED}
         self.to_float = to_float
-        self.color_type = color_type
+        self.color_type = color_types[color_type]
         self.max_value = max_value
         self.force_3chan = force_3chan
-
-        assert color_type in ['color', 'anydepth', 'unchanged']
-
-    def __call__(self, results):
-        image_file = results['image_path']
-
-        if self.color_type == 'color':
-            image = cv2.cvtColor(cv2.imread(image_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-        elif self.color_type == 'anydepth':
-            image = cv2.imread(image_file, cv2.IMREAD_ANYDEPTH)
-        elif self.color_type == 'unchanged':
-            image = cv2.imread(image_file, cv2.IMREAD_UNCHANGED)
-        else:
-            image = cv2.cvtColor(cv2.imread(image_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-        assert image is not None, f'empty file: {image_file}'
-
-        if self.to_float:
-            image = image.astype(np.float32)
-
-        if self.max_value == 'max':
-            image = image / np.max(image)
-
-        if self.force_3chan:
-            image = np.stack([image for _ in range(3)], -1)
-
-        results['image'] = image
-        results['original_shape'] = (image.shape[1], image.shape[0])
-        results['scale_factor'] = 1.0
-        return results
+        self.backend = backend
 
     def __call__(self, results):
-        image = Image.open(fp=results['image_path'], mode='r', formats=None)
-        image = Image.fromarray(obj=image, mode=None)
+        if 'image' not in results.keys():
+            if self.backend in ('pil', 'pillow'):
+                image = Image.open(fp=results['image_path'], mode='r', formats=None)
+                results['image'] = Image.fromarray(obj=image, mode=None)
+
+            elif self.backend == 'cv2':
+                image = cv2.imread(results['image_path'], self.color_type)
+                results['image'] = cv2.cvtColor(src=image, code=cv2.COLOR_BGR2RGB)
 
         if self.to_float:
-            image = image.astype(np.float32)
+            results['image'] = results['image'].astype(np.float32)
 
-            if self.max_value:
-                image /= np.max(image)
+            if self.max_value == 'max':
+                results['image'] /= np.max(results['image'])
+            elif isinstance(self.max_value, (float, int)):
+                results['image'] /= self.max_value
 
         if self.force_3chan:
-            image = np.stack([image for _ in range(3)], -1)
+            results['image'] = np.stack([results['image'] for _ in range(3)], -1)
 
-        results['image'] = image
-        results['original_shape'] = (image.shape[1], image.shape[0])
+        results['original_shape'] = (results['image'].shape[1], results['image'].shape[0])
         results['scale_factor'] = 1.0
         return results
 
@@ -95,8 +76,7 @@ class LoadNumpyImage:
 
 @PIPELINES.register_module
 class LoadAnnotations:
-    def __init__(self, num_classes=1, from_rel=False, color_type='unchanged'):
-        self.num_classes = num_classes
+    def __init__(self, from_rel=False, color_type='unchanged'):
         self.from_rel = from_rel
         if color_type == 'color':
             self.load_option = cv2.IMREAD_COLOR
@@ -117,15 +97,6 @@ class LoadAnnotations:
             label_file = results['label_path']
             results['label'] = cv2.imread(label_file, self.load_option)
         return results
-    
-    def _to_one_hot(self, label):
-        one_hot_label = []
-        for i in range(1, self.num_classes + 1):
-            one_hot_label.append(label == i)
-        
-        one_hot_label = np.stack(one_hot_label, axis=2)
-        one_hot_label = one_hot_label.astype(np.uint8)
-        return one_hot_label
 
     @staticmethod
     def rle2mask(mask_rle, shape):

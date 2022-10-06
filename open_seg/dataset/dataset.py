@@ -1,42 +1,46 @@
+import os
+import itertools
 from copy import deepcopy
 import torch
-from open_seg.losses import dice_metric
+from torch.utils.data import Dataset
+from .builder import build_pipeline
+from ..models.losses import dice_metric
 
 
-class SegmentData(torch.utils.data.Dataset):
+class CustomDataset(Dataset):
     def __init__(
             self,
-            split,
+            pipeline,
             data_root,
+            split,
             image_prefix,
             label_prefix,
-            image_suffix='.png',
-            label_suffix='.png',
+            image_suffix,
+            label_suffix,
             cache_image=False,
             cache_label=False,
-            test_mode=False
     ):
-        self.split_file = data_root + '/' + split
-        self.image_dir = data_root + '/' + image_prefix
-        self.laebl_dir = data_root + '/' + label_prefix
+        self.split_file = os.path.join(data_root, split)
+        self.image_prefix = os.path.join(data_root, image_prefix)
+        self.label_prefix = os.path.join(data_root, label_prefix)
         self.image_suffix = image_suffix
         self.label_suffix = label_suffix
-        self.test_mode = test_mode
         self.pipeline = None
         self.gt_seg_map_loader = None
 
         self._load_annotation()
+        self.build_pipeline(pipeline_config=pipeline)
 
-        self.cache_image = cache_image
-        self.cache_label = cache_label
+        if cache_image:
+            self._cache_images()
+
+        if cache_label:
+            self._cache_labels()
 
     def __len__(self):
         return self.ant_data_list.__len__()
 
     def __getitem__(self, index):
-        return self._prepare_train_image(index)
-
-    def _prepare_train_image(self, index):
         item = deepcopy(self.ant_data_list[index])
         return self.pipeline(item)
 
@@ -49,12 +53,13 @@ class SegmentData(torch.utils.data.Dataset):
             if split == '':
                 continue
             ant_data = {
-                'image_path': f'{self.image_dir}/{split}{self.image_suffix}',
-                'label_path': f'{self.laebl_dir}/{split}{self.label_suffix}'
+                'image_path': os.path.join(self.image_prefix, split + self.image_suffix),
+                'label_path': os.path.join(self.label_prefix, split + self.label_suffix)
             }
             self.ant_data_list.append(ant_data)
 
     def _cache_images(self):
+        # TODO parallel cache
         for index in range(self.ant_data_list.__len__()):
             self.ant_data_list[index] = self.pipeline['LoadImageFromFile'](self.ant_data_list[index])
 
@@ -62,21 +67,12 @@ class SegmentData(torch.utils.data.Dataset):
             del self.pipeline.transforms['LoadImageFromFile']
 
     def _cache_labels(self):
+        # TODO parallel cache
         for index in range(self.ant_data_list.__len__()):
             self.ant_data_list[index] = self.gt_seg_map_loader(self.ant_data_list[index])
 
         if 'LoadAnnotations' in self.pipeline.transforms.keys():
             del self.pipeline.transforms['LoadAnnotations']
-
-    def get_pipeline(self, pipeline):
-        self.pipeline = pipeline
-        self.gt_seg_map_loader = pipeline.transforms['LoadAnnotations']
-
-        if self.cache_image:
-            self._cache_images()
-
-        if self.cache_label:
-            self._cache_labels()
 
     def pre_eval(self, pred, index):
         assert pred.ndim == 3
@@ -85,6 +81,23 @@ class SegmentData(torch.utils.data.Dataset):
         label = results['label']
         dice_score = dice_metric(pred=pred, label=label, smooth=1.0)
         return dice_score
+
+    def build_pipeline(self, pipeline_config):
+        self.pipeline = build_pipeline(config=pipeline_config)
+        self.gt_seg_map_loader = self.pipeline.transforms['LoadAnnotations']
+
+
+class InfiniteSampler:
+    def __init__(self, dataset_size):
+        self.dataset_size = dataset_size
+        self.generator = torch.Generator(device='cpu')
+
+    def __iter__(self):
+        yield from itertools.islice(self._infinite(), 0, None, 1)
+
+    def _infinite(self):
+        while True:
+            yield from torch.randperm(self.dataset_size, generator=self.generator)
 
 
 def train_collate_fn(batch_list):

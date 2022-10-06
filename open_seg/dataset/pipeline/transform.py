@@ -1,4 +1,5 @@
 import copy
+from typing import Sequence
 import cv2
 import numpy as np
 import torch
@@ -8,22 +9,30 @@ try:
 except:
     pass
 
-from open_seg.utils import to_tuple
-from open_seg.builder import PIPELINES
+from ..builder import PIPELINES
 
-__all__ = [
-    'IdentityTransform',
-    'Compose',
-    'Normalize',
-    'Resize',
-    'Padding',
-    'RemovePad',
-    'RandomFlipHorizontal',
-    'FlipHorizontal',
-    'RandomFlipVertical',
-    'FlipVertical',
-    'ShiftScaleRotateShear',
-]
+
+def to_tuple(param, low=None, bias=None):
+    if low is not None and bias is not None:
+        raise ValueError("Arguments low and bias are mutually exclusive")
+
+    if param is None:
+        return param
+
+    if isinstance(param, (int, float)):
+        if low is None:
+            param = -param, +param
+        else:
+            param = (low, param) if low < param else (param, low)
+    elif isinstance(param, Sequence):
+        param = tuple(param)
+    else:
+        raise ValueError("Argument param must be either scalar (int, float) or tuple")
+
+    if bias is not None:
+        return tuple(bias + x for x in param)
+
+    return tuple(param)
 
 
 @PIPELINES.register_module
@@ -57,7 +66,11 @@ class Compose:
     def _transpose(results):
         results['image'] = results['image'].transpose(2, 0, 1)
         if 'label' in results:
-            results['label'] = results['label'].transpose(2, 0, 1)
+            if results['label'].ndim == 2:
+                # results['label'] = np.expand_dims(a=results['label'], axis=0)
+                pass
+            else:
+                results['label'] = results['label'].transpose(2, 0, 1)
         return results
 
     @staticmethod
@@ -66,41 +79,6 @@ class Compose:
         if 'label' in results:
             results['label'] = torch.tensor(results['label'], dtype=torch.float)
         return results
-
-
-@PIPELINES.register_module
-class ToFloat:
-    def __call__(self, results):
-        results['image'] = results['image'].astype(np.float32) / 255.0
-        return results
-
-
-@PIPELINES.register_module
-class ToByte:
-    def __init__(self, dtype='byte'):
-        assert dtype in ('byte', 'float')
-        if dtype == 'byte':
-            self.dtype = np.uint8
-        elif dtype == 'float':
-            self.dtype = np.float32
-
-    def __call__(self, results):
-        results['image'] = (results['image'] * 255).astype(self.dtype)
-        return results
-
-
-@PIPELINES.register_module
-class Normalize:
-    def __init__(self, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, results):
-        results['image'] = self._norm(results['image'])
-        return results
-
-    def _norm(self, image):
-        return (image.astype(np.float32) / 255.0 - self.mean) / self.std
 
 
 @PIPELINES.register_module
@@ -119,14 +97,18 @@ class Resize:
             results['image'] = cv2.resize(results['image'], dsize=(self.new_size, self.new_size))
             if 'label' in results:
                 results['label'] = cv2.resize(results['label'], dsize=(self.new_size, self.new_size))
+
+        if 'label' in results and results['label'].ndim == 3:
+            results['label'] = np.squeeze(a=results['label'], axis=2)
+
         return results
 
     def _reisze_retio(self, image):
         height, width, = image.shape[:2]
         retio = self.new_size / max(height, width)
 
-        new_h = int(height * retio)
-        new_w = int(width * retio)
+        new_h = round(height * retio)
+        new_w = round(width * retio)
         image = cv2.resize(image, dsize=(new_w, new_h))
 
         if image.ndim == 2:
@@ -187,6 +169,7 @@ class Padding:
         return top_pad, bottom_pad, left_pad, right_pad
 
 
+@PIPELINES.register_module
 class RemovePad:
     def __init__(self):
         pass
@@ -195,9 +178,9 @@ class RemovePad:
         w, h = results['image'].shape[:2]
         pad_b = h - results['pad_b']
         pad_r = w - results['pad_r']
-        results['image'] = results['image'][results['pad_t']:pad_b, results['pad_l']:pad_r, :]
+        results['image'] = results['image'][results['pad_t']:pad_b, results['pad_l']:pad_r]
         if 'label' in results:
-            results['label'] = results['label'][results['pad_t']:pad_b, results['pad_l']:pad_r, :]
+            results['label'] = results['label'][results['pad_t']:pad_b, results['pad_l']:pad_r]
         return results
 
 
@@ -233,30 +216,9 @@ class RandomResizeCrop:
         if 'label' in results:
             results['label'] = results['label'][crop_x: crop_x + crop_size, crop_y: crop_y + crop_size, :]
             results['label'] = cv2.resize(results['label'], dsize=(self.size, self.size))
-        return results
 
-
-@PIPELINES.register_module
-class FlipHorizontal:
-    def __init__(self):
-        self.FLIP_HIRIZONTAL = 1
-
-    def __call__(self, results):
-        results['image'] = results['image'][:, ::-1]
-        if 'label' in results:
-            results['label'] = results['label'][:, ::-1]
-        return results
-
-
-@PIPELINES.register_module
-class FlipVertical:
-    def __init__(self):
-        self.FLIP_VERTICAL = 0
-
-    def __call__(self, results):
-        results['image'] = results['image'][::-1, :]
-        if 'label' in results:
-            results['label'] = results['label'][::-1, :]
+        if results['label'].ndim == 3:
+            results['label'] = np.squeeze(a=results['label'], axis=2)
         return results
 
 
@@ -357,7 +319,8 @@ class ShiftScaleRotateShear:
 
         return results
 
-    def _get_matrix(self, image_shape, angle, scale, shfit_x, shfit_y, shear_x, shear_y):
+    @staticmethod
+    def _get_matrix(image_shape, angle, scale, shfit_x, shfit_y, shear_x, shear_y):
         height, width = image_shape[:2]
         center = (width / 2, height / 2)
         rot_matrix = cv2.getRotationMatrix2D(center, angle, scale)
@@ -372,54 +335,13 @@ class ShiftScaleRotateShear:
 
 
 @PIPELINES.register_module
-class RandomHSV:
-    def __init__(self, hsv=(0.15, 0.25, 0.25), prob=1.0):
-        self.hsv = hsv
-        self.prob = prob
-
-    def __call__(self, results):
-        if np.random.random() < self.prob:
-            return self._random_hsv(results=results)
-        else:
-            return results
-
-    def _random_hsv(self, results):
-        if results['image'].dtype == np.float32:
-            image = (results['image'] * 255).astype(np.uint8)
-            float_type = True
-        else:
-            image = results['image']
-            float_type = False
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        h = hsv[:, :, 0].astype(np.float32)  # hue
-        s = hsv[:, :, 1].astype(np.float32)  # saturation
-        v = hsv[:, :, 2].astype(np.float32)  # value
-        h = (h * (1 + np.random.uniform(-1, 1) * self.hsv[0])) % 180
-        s = s * (1 + np.random.uniform(-1, 1) * self.hsv[1])
-        v = v * (1 + np.random.uniform(-1, 1) * self.hsv[2])
-
-        hsv[:, :, 0] = np.clip(h, 0, 180).astype(np.uint8)
-        hsv[:, :, 1] = np.clip(s, 0, 255).astype(np.uint8)
-        hsv[:, :, 2] = np.clip(v, 0, 255).astype(np.uint8)
-        results['image'] = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        if float_type:
-            results['image'] = results['image'].astype(np.float32) / 255.0
-        return results
-
-
-@PIPELINES.register_module
 class Album:
     """Albumentation augmentation.
-
     Adds custom transformations from Albumentations library.
     Please, visit `https://albumentations.readthedocs.io`
     to get more information.
-
     An example of ``transforms`` is as followed:
-
     .. code-block::
-
         [
             dict(
                 type='ShiftScaleRotate',
@@ -445,20 +367,15 @@ class Album:
     """
 
     def __init__(self, transforms):
-
-        # Args will be modified later, copying it will be safer
         transforms = copy.deepcopy(transforms)
         self.transforms = transforms
         self.aug = albumentations.Compose([self.albu_builder(t) for t in self.transforms])
 
     def albu_builder(self, cfg):
         """Import a module from albumentations.
-
         It inherits some of :func:`build_from_cfg` logic.
-
         Args:
             cfg (dict): Config dict. It should at least contain the key "type".
-
         Returns:
             obj: The constructed object.
         """
