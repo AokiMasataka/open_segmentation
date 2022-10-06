@@ -1,3 +1,7 @@
+# Introduction
+open_segmentation is a library that allows anyone to easily perform segmentation from learning to inference.
+
+
 # Installation
 ```bash
 git clone https://github.com/AokiMasataka/open_segmentation.git
