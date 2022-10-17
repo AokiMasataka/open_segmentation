@@ -21,18 +21,28 @@ def dice_metric(pred, label, smooth=1.0):
     return (2.0 * intersection + smooth) / (cardinality + smooth).clip(min=1e-6, max=None)
 
 
-def dice_score(pred, label, smooth=1.0):
-    intersection = torch.sum(input=pred * label)
-    cardinality = torch.sum(input=pred + label)
-    return (2.0 * intersection + smooth) / (cardinality + smooth).clamp_min(1e-6)
+
+def binary_dice_loss(predicts, labels, smooth=1.0):
+    intersection = torch.sum(input=predicts * labels)
+    cardinality = torch.sum(input=predicts + labels)
+    return 1 - (2.0 * intersection + smooth) / (cardinality + smooth).clamp_min(1e-6)
 
 
-def multiclass_dice(preds, labels, smooth=1.0, class_weight=None):
-    loss = []
-    for pred, label in zip(preds, labels):
-        loss.append(1 - dice_score(pred=pred, label=label, smooth=smooth))
-
-    loss = torch.stack(loss) * class_weight
+def dice_loss(predicts, labels, smooth=1.0, class_weight=None):
+    loss = list()
+    for i in range(predicts.shape[1]):
+        class_loss = binary_dice_loss(
+            predicts=predicts[:, i],
+            labels=labels[..., i],
+            smooth=smooth
+        )
+        
+        if class_loss is not None:
+            class_loss *= class_loss[i]
+        
+        loss.append(class_loss)
+    
+    loss = torch.mean(torch.cat(loss, dim=0), dim=0)
     return loss
 
 
@@ -48,11 +58,6 @@ class DiceLoss(nn.Module):
         self.class_weight = class_weight
         self.loss_name = loss_name
 
-        if mode == BINARY_MODE:
-            self.loss_fn = dice_score
-        elif mode == MULTICLASS_MODE:
-            self.loss_fn = multiclass_dice
-
     def forward(self, logits, labels):
         _, num_classes, _, _ = logits.shape
 
@@ -63,15 +68,13 @@ class DiceLoss(nn.Module):
 
         if self.mode == BINARY_MODE:
             labels = labels.unsqueeze(1)
-            assert logits.shape == labels.shape
-            score = dice_score(pred=logits.sigmoid(), label=labels, smooth=self.smooth)
+            score = binary_dice_loss(pred=logits.sigmoid(), label=labels, smooth=self.smooth)
             loss = (1 - score) * self.loss_weight
             return loss
 
         elif self.mode == MULTICLASS_MODE:
             labels = functional.one_hot(tensor=labels, num_classes=num_classes).float()
-            assert logits.shape == labels.shape
-            loss = multiclass_dice(
+            loss = dice_loss(
                 preds=logits.sigmoid(), labels=labels, smooth=self.smooth, class_weight=self.class_weight
             )
             loss = loss * self.loss_weight

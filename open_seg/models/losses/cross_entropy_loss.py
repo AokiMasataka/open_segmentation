@@ -3,9 +3,17 @@ from torch.nn import functional
 from ..builder import LOSSES
 
 
+def binary_cross_entropy(logits, labels, weight=None, ignore_index=255, label_smoothing=0.0):
+    labels = labels.unsqueeze(1)
+    labels = (1 - labels) * label_smoothing + labels * (1 - label_smoothing)
+    loss = functional.binary_cross_entropy_with_logits(input=logits.sigmoid(), target=labels, reduction='mean')
+    return loss
+
+
 def cross_entropy(logits, labels, weight=None, ignore_index=-100, label_smoothing=0.0):
-    assert logits.ndim == labels.ndim - 1
-    labels = labels.long()
+    b, c, w, h = logits.shape
+    logits = logits.permute(0, 2, 3, 1).reshape(b * w * h, c)
+    labels = labels.view(b * w * h)
 
     loss = functional.cross_entropy(
         input=logits,
@@ -18,40 +26,22 @@ def cross_entropy(logits, labels, weight=None, ignore_index=-100, label_smoothin
     return loss
 
 
-def binary_cross_entropy(logits, labels, weight=None, ignore_index=255, label_smoothing=0.0):
-    _, num_classes, _, _ = logits.shape
-    if 1 < num_classes:
-        labels = functional.one_hot(labels, num_classes=num_classes).permute(0, 2, 3, 1)
-    else:
-        labels = labels.unsqueeze(1)
-    assert logits.shape == labels.shape, f'logits shape: {logits.shape} labels shape: {labels.shape}'
-
-    labels = (1 - labels) * label_smoothing + labels * (1 - label_smoothing)
-    loss = functional.binary_cross_entropy_with_logits(input=logits.sigmoid(), target=labels, reduction='mean')
-    return loss
-
-
 @LOSSES.register_module
 class CrossEntropyLoss(nn.Module):
-    def __init__(self, mode='bce', label_smooth=0.0, loss_weight=1.0, weight=None, ignore_index=-100, loss_name=None):
+    def __init__(self, mode='binary', label_smooth=0.0, loss_weight=1.0, weight=None, ignore_index=-100, loss_name=None):
         super(CrossEntropyLoss, self).__init__()
-        assert mode in ('bce', 'ce')
+        assert mode in ('binary', 'multiclass')
         self.mode = mode
         self.label_smooth = label_smooth
         self.loss_weight = loss_weight
         self.weight = weight
         self.ignore_index = ignore_index
 
-        if mode == 'ce':
-            self.loss_fn = cross_entropy
-        elif mode == 'bce':
+        if mode == 'binary':
             self.loss_fn = binary_cross_entropy
-
-        if loss_name is None:
-            self.loss_name = mode + '_loss'
-        else:
-            self.loss_name = loss_name
-
+        elif mode == 'multiclass':
+            self.loss_fn = cross_entropy
+        
     def forward(self, logits, labels):
         loss = self.loss_fn(
             logits=logits,

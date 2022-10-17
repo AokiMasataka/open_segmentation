@@ -20,7 +20,7 @@ model = dict(
         embedding_dim=256,
         drop_prob=0.0
     ),
-    loss=[dict(type='CrossEntropyLoss', mode='bce', label_smooth=0.01, loss_weight=1.0)],
+    loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
     init_config=None,
     test_config=dict(mode='whole'),
     norm_config=dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
