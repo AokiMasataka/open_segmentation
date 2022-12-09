@@ -41,7 +41,7 @@ class SegFormerHead(DecoderBase):
         c1, c2, c3, c4 = x
         interpolate_size = c1.size()[2:]
 
-        n, _, h, w = c4.shape
+        n, _, _, _ = c4.shape
 
         _c4 = self.linear_c4(c4).permute(0, 2, 1).reshape(n, -1, c4.shape[2], c4.shape[3])
         _c4 = functional.interpolate(input=_c4, size=interpolate_size, mode='bilinear', align_corners=False)
