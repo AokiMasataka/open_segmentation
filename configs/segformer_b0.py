@@ -1,7 +1,5 @@
 model = dict(
-    segmenter=dict(
-        type='EncoderDecoder',
-    ),
+    segmenter=dict(type='EncoderDecoder'),
     backbone=dict(
         type='MixVisionTransformer',
         pretrained='https://github.com/qubvel/segmentation_models.pytorch/releases/download/v0.0.2/mit_b0.pth',
