@@ -1,4 +1,5 @@
 from copy import deepcopy
+from openbacks import build_backbone
 
 
 class Registry:
@@ -29,7 +30,10 @@ SEGMENTER = Registry(name='segmenters')
 
 
 def build_model(config):
-    backbone = BACKBONES.build(config=config['backbone'])
+    try:
+        backbone = BACKBONES.build(config=config['backbone'])
+    except:
+        backbone = build_backbone(config=config['backbone'])
     try:
         config['decoder']['encoder_channels'] = backbone.out_channels()
         config['decoder']['scale_factors'] = backbone.scale_factors

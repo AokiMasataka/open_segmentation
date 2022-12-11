@@ -1,14 +1,16 @@
 model = dict(
-    segmenter=dict(
-        type='EncoderDecoder',
-    ),
+    segmenter=dict(type='EncoderDecoder'),
     backbone=dict(
-        type='convnext_base',
-        pretrained=True,
-        n_blocks=4,
+        type='ConvNeXt',
+        depth=(3, 3, 27, 3),
+        dims=(128, 256, 512, 1024),
+        out_indices=(0, 1, 2, 3),
+        drop_path_rate=0.3,
+        init_config=dict(pretrained='https://dl.fbaipublicfiles.com/convnext/convnext_base_22k_1k_384.pth')
     ),
     decoder=dict(
         type='Unet',
+        encoder_channels=(128, 256, 512, 1024),
         decoder_channels=(512, 256, 128, 32),
         n_blocks=4,
     ),

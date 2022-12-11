@@ -6,7 +6,8 @@ open_segmentation is a library that allows anyone to easily perform segmentation
 ```bash
 git clone https://github.com/AokiMasataka/open_segmentation.git
 cd ./open_segmentation
-pip install .
+pip install -r requirements.txt
+python setup.py install
 ```
 
 # config file

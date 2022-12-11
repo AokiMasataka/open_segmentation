@@ -1,27 +1,25 @@
 import io
 import os
 from setuptools import setup, find_packages
-from open_seg import __version__
+from openseg import __version__
 
 
-NAME = 'open_seg'
+NAME = 'openseg'
 DESCRIPTION = 'sementic segmentation lib'
 URL = 'git@github.com:AokiMasataka/open_segment.git'
 EMAIL = None
 AUTHOR = None
-REQUIRES_PYTHON = '>=3.7.0'
+REQUIRES_PYTHON = '>=3.8.0'
 VERSION = __version__
 
-INSTALL_REQUIRES = ['torch', 'torchvision', 'timm', 'tqdm']
+INSTALL_REQUIRES = ['torch', 'torchvision', 'timm', 'tqdm', 'openbacks']
 EXTRAS_REQUIRE = {}
-PACKAGES = ['open_seg']
+PACKAGES = ['openseg']
 
 CLASSIFIERS = [
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: BSD License',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.6',
-    'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3 :: Only',
@@ -39,6 +37,26 @@ try:
         long_description = '\n' + f.read()
 except FileNotFoundError:
     long_description = DESCRIPTION
+
+
+def take_package_name(name):
+    if name.startswith('-e'):
+        return name[name.find('=')+1:name.rfind('-')]
+    else:
+        return name.strip()
+
+def load_requires_from_file(filepath):
+    with open(filepath) as fp:
+        return [take_package_name(pkg_name) for pkg_name in fp.readlines()]
+
+
+def load_links_from_file(filepath):
+    res = []
+    with open(filepath) as fp:
+        for pkg_name in fp.readlines():
+            if pkg_name.startswith("-e"):
+                res.append(pkg_name.split(" ")[1])
+    return res
 
 
 setup(

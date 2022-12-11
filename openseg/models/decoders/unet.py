@@ -9,7 +9,7 @@ class Unet(DecoderBase):
             self,
             encoder_channels,
             decoder_channels,
-            scale_factors,
+            scale_factors=None,
             n_blocks=5,
             attention_type='scse',
             center_block_type='basic',
@@ -17,12 +17,16 @@ class Unet(DecoderBase):
     ):
         super(Unet, self).__init__()
         assert n_blocks == len(decoder_channels)
+        assert n_blocks == len(encoder_channels)
 
         self._encoder_channels = encoder_channels
         self._decoder_channels = decoder_channels
 
         encoder_channels = list(encoder_channels)
         decoder_channels = list(decoder_channels)
+
+        if scale_factors is None:
+            scale_factors = (4,) + tuple(2 for _ in range(n_blocks - 1))
         scale_factors = list(scale_factors)
         encoder_channels.reverse()
         scale_factors.reverse()

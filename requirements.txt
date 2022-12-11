@@ -1,3 +1,4 @@
+git+https://github.com/AokiMasataka/open_backbones.git@v0.0.1
 tqdm
 opencv-python
 numpy

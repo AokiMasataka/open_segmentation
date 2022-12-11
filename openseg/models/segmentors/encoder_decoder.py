@@ -2,7 +2,7 @@ from torch import nn
 
 from .base import SegmentorBase
 from ..builder import SEGMENTER
-from open_seg.utils.torch_utils import force_fp32
+from openseg.utils.torch_utils import force_fp32
 
 
 @SEGMENTER.register_module

@@ -4,11 +4,11 @@ import warnings
 import argparse
 from torch.utils.data import DataLoader
 
-from open_seg.dataset import CustomDataset, InfiniteSampler, train_collate_fn
-from open_seg.models import build_model
-from open_seg.core import build_optimizer, build_scheduler, DummyScheduler
-from open_seg.engin import TrainnerArgs, trainner
-from open_seg.utils import load_config_file
+from openseg.dataset import CustomDataset, InfiniteSampler, train_collate_fn
+from openseg.models import build_model
+from openseg.core import build_optimizer, build_scheduler, DummyScheduler
+from openseg.engin import TrainnerArgs, trainner
+from openseg.utils import load_config_file
 
 
 def build_components(config):
