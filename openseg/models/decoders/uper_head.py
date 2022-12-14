@@ -6,9 +6,9 @@ from ..builder import DECODERS
 
 
 @DECODERS.register_module
-class Upernet(DecoderBase):
+class UperHead(DecoderBase):
     def __init__(self, encoder_channels, channels, pool_scales=(1, 2, 3, 6), align_corners=False, fpn_bottleneck_type='conv'):
-        super(Upernet, self).__init__()
+        super(UperHead, self).__init__()
         assert fpn_bottleneck_type in ('conv', 'attention')
         self._encoder_channels = encoder_channels
         self.align_corners = align_corners

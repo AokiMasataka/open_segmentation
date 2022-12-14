@@ -12,10 +12,13 @@ model = dict(
         )
     ),
     decoder=dict(
-        type='Unet',
+        type='UnetHead',
         encoder_channels=(128, 256, 512, 1024),
         decoder_channels=(512, 256, 128, 32),
-        n_blocks=4,
+        num_blocks=4,
+        center_block_config=dict(type='CenterBlock', in_dim=1024),
+        layers=1,
+        eps=1e-6,
     ),
     loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
     init_config=None,

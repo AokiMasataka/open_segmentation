@@ -11,10 +11,13 @@ model = dict(
         init_config=dict(pretrained='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-rsb-weights/resnet101_a1h-36d3f2aa.pth')
     ),
     decoder=dict(
-        type='Unet',
-        encoder_channles=(256, 256, 512, 1024, 2048),
-        decoder_channels=(256, 128, 64, 32, 16),
-        n_blocks=5,
+        type='UnetHead',
+        encoder_channles=(64, 256, 512, 1024, 2048),
+        decoder_channels=(512, 256, 128, 64, 32),
+        num_blocks=5,
+        center_block_config=dict(type='CenterBlock', in_dim=2048),
+        layers=1,
+        eps=1e-6,
     ),
     loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
     init_config=None,
