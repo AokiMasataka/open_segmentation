@@ -1,5 +1,6 @@
+import torch
 from torch import nn
-from openbacks.layers import SelfAttention, FeedForward
+from openbacks.layers import CrossAttention, SelfAttention, FeedForward
 
 
 __all__ = ('ResBlock', 'CenterBlock', 'TransformerCenterBlock')
@@ -15,19 +16,22 @@ class ResBlock(nn.Module):
         activation: str = 'relu',
         dropout: float = 0.0,
         downsample: bool = False,
-        upsample: bool = False
+        upsample: bool = False,
+        extend: int = 1,
     ):
         super(ResBlock, self).__init__()
         assert (not downsample) or (not upsample)
         blocks = list()
-        for _ in range(layers):
+        for i in range(layers):
+            in_dim = in_dim if i == 0 else out_dim
             blocks.append(
                 ResLayer(
                     in_dim=in_dim,
                     out_dim=out_dim,
                     eps=eps,
                     activation=activation,
-                    dropout=dropout
+                    dropout=dropout,
+                    extend=extend
                 )
             )
         
@@ -54,25 +58,33 @@ class ResBlock(nn.Module):
 
 
 class ResLayer(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, eps: float = 1e-6, activation: str = 'relu', dropout: float = 0.0):
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        eps: float = 1e-6,
+        activation: str = 'relu',
+        dropout: float = 0.0,
+        extend: int = 1,
+    ):
         super(ResLayer, self).__init__()
-        activations = {'relu': nn.ReLU, 'gelu': nn.GELU}
+        activations = {'relu': nn.ReLU, 'gelu': nn.GELU, 'silu': nn.SiLU, 'swish': nn.SiLU}
         assert activation in activations.keys()
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels=in_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1, bias=False),
-            nn.BatchNorm2d(out_dim, eps=eps),
+            nn.Conv2d(in_channels=in_dim, out_channels=out_dim * extend, kernel_size=(3, 3), padding=1, bias=False),
+            nn.BatchNorm2d(out_dim * extend, eps=eps),
             activations[activation](),
             nn.Dropout2d(dropout),
-            nn.Conv2d(in_channels=out_dim, out_channels=out_dim, kernel_size=(3, 3), padding=1, bias=False),
+            nn.Conv2d(in_channels=out_dim * extend, out_channels=out_dim, kernel_size=(3, 3), padding=1, bias=False),
             nn.BatchNorm2d(out_dim, eps=eps),
             activations[activation](),
         )
 
         self.se = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Conv2d(out_dim, out_dim // 16, kernel_size=(1, 1), stride=(1, 1)),
+            nn.Conv2d(out_dim, out_dim // 8, kernel_size=(1, 1), stride=(1, 1)),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_dim // 16, out_dim, kernel_size=(1, 1), stride=(1, 1)),
+            nn.Conv2d(out_dim // 8, out_dim, kernel_size=(1, 1), stride=(1, 1)),
             nn.Sigmoid()
         )
 
@@ -120,10 +132,9 @@ class CenterBlock(nn.Sequential):
         super().__init__(conv1, bn1, activate1, conv2, bn2, activate2)
 
 
-class TransformerLayer(nn.Module):
+class TransformerEncoderLayer(nn.Module):
     def __init__(self, in_dim:  int, num_heads: int, dropout: float = 0.0, eps: float = 1e-6):
-        super(TransformerLayer, self).__init__()
-
+        super(TransformerEncoderLayer, self).__init__()
         self.attention = SelfAttention(dim_query=in_dim, num_heads=num_heads, dropout=dropout)
         self.attention_norm = nn.LayerNorm(in_dim, eps=eps)
         self.ffn = FeedForward(dim=in_dim, dropout=dropout, activation_fn='gelu')
@@ -135,12 +146,30 @@ class TransformerLayer(nn.Module):
         return x
 
 
+class BasicTransformerLayer(nn.Module):
+    def __init__(self, embed_dim, dim_cross, num_heads, dropout=0.0):
+        super(BasicTransformerLayer, self).__init__()
+        self.cross_attn = CrossAttention(dim_query=embed_dim, dim_cross=dim_cross, num_heads=num_heads, dropout=dropout)
+        self.cross_norm = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.self_attn = SelfAttention(dim_query=embed_dim, num_heads=num_heads, dropout=dropout)
+        self.self_norm = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.ffn = FeedForward(dim=embed_dim, dropout=dropout, activation_fn='gelu')
+        self.ffn_norm = nn.LayerNorm(embed_dim, eps=1e-6)
+    
+    def forward(self, hidden_state, context):
+        hidden_state = self.cross_attn(self.cross_norm(hidden_state), context) + hidden_state
+        hidden_state = self.self_attn(self.self_norm(hidden_state)) + hidden_state
+        hidden_state = self.ffn(self.ffn_norm(hidden_state))
+        return hidden_state
+
+
 class TransformerCenterBlock(nn.Module):
-    def __init__(self, in_dim: int, num_heads: int, num_layers: int = 1, dropout: float = 0.0, eps: float = 1e-6):
+    def __init__(self, in_dim: int, num_heads: int, max_pos: int, num_layers: int = 1, dropout: float = 0.0, eps: float = 1e-6):
         super(TransformerCenterBlock, self).__init__()
+        self.pos_embedding = PositionEmbedding(embed_dim=in_dim, max_position=max_pos)
         layers = list()
-        for i in range(num_layers):
-            layers.append(TransformerLayer(in_dim, num_heads, dropout, eps))
+        for _ in range(num_layers):
+            layers.append(TransformerEncoderLayer(in_dim, num_heads, dropout, eps))
 
         self.layers = nn.Sequential(*layers)
     
@@ -148,7 +177,37 @@ class TransformerCenterBlock(nn.Module):
         B, C, W, H = x.shape
         x = x.view(B, C, W * H).transpose(1, 2)
 
+        x = self.pos_embedding(hidden_state=x)
         x = self.layers(x)
 
         x = x.transpose(1, 2).view(B, C, W, H)
         return x
+
+
+class BasicTransformer2D(nn.Module):
+    def __init__(self, embed_dim, dim_cross, num_heads, num_layers, dropout=0.0):
+        super(BasicTransformer2D, self).__init__()
+        blocks = [BasicTransformerLayer(
+            embed_dim=embed_dim, dim_cross=dim_cross, num_heads=num_heads, dropout=dropout
+        ) for _ in range(num_layers)]
+        self.blocks = nn.ModuleList(blocks)
+    
+    def forward(self, hidden_state, context):
+        B, C, W, H = hidden_state.shape
+        hidden_state = hidden_state.view(B, C, W * H).transpose(1, 2)
+
+        for block in self.blocks:
+            hidden_state = block(hidden_state, context)
+        
+        return hidden_state.transpose(1, 2).view(B, C, W, H)
+    
+
+class PositionEmbedding(nn.Module):
+    def __init__(self, embed_dim: int, max_position: int = 16 * 16):
+        super(PositionEmbedding, self).__init__()
+        self.embeddings = nn.Parameter(torch.Tensor(1, max_position, embed_dim))
+
+    def forward(self, hidden_state):
+        _, N, _ = hidden_state.shape
+        hidden_state = hidden_state + self.embeddings[:, :N, :]
+        return hidden_state

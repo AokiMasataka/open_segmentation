@@ -9,8 +9,9 @@ from ..builder import DECODERS
 class UnetHead(DecoderBase):
     def __init__(
         self,
-        encoder_dims,
-        decoder_dims,
+        num_classes: int,
+        encoder_dims: tuple,
+        decoder_dims: tuple,
         num_blocks: int,
         center_block_config: dict = None,
         layers: int = 1,
@@ -18,10 +19,10 @@ class UnetHead(DecoderBase):
     ):
         super(UnetHead, self).__init__()
         assert num_blocks == encoder_dims.__len__() == decoder_dims.__len__()
-        
-        encoder_dims = list(encoder_dims)
-        decoder_dims = list(decoder_dims)
-        encoder_dims.reverse()
+
+        self.encoder_dims = encoder_dims
+        self.decoder_dims = decoder_dims
+        encoder_dims = encoder_dims[::-1]
 
         blocks = list()
         prov_dim = encoder_dims[0]
@@ -33,7 +34,7 @@ class UnetHead(DecoderBase):
                     out_dim=decoder_dim,
                     layers=layers,
                     eps=eps,
-                    activation='gelu',
+                    activation='relu',
                     upsample=upsample
                  )
             )
@@ -41,6 +42,13 @@ class UnetHead(DecoderBase):
         
         self.blocks = nn.ModuleList(blocks)
         self.center_block = build_center_block(center_block_config)
+        self.head = nn.Sequential(
+            nn.Conv2d(decoder_dims[-1], decoder_dims[-1] * 2, kernel_size=(3, 3), stride=(1, 1), padding=1),
+            nn.ReLU(),
+            nn.Dropout2d(p=0.1),
+            nn.BatchNorm2d(num_features=decoder_dims[-1] * 2, eps=eps),
+            nn.Conv2d(decoder_dims[-1] * 2, num_classes, kernel_size=(1, 1), stride=(1, 1), padding=0),
+        )
     
     def forward(self, features):
         features.reverse()
@@ -49,6 +57,8 @@ class UnetHead(DecoderBase):
         for block, feature in zip(self.blocks, features):
             x = torch.cat((x, feature), dim=1)
             x = block(x)
+
+        x = self.head(x)
         return x
 
 

@@ -29,15 +29,15 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
 
         self.num_classes = num_classes
 
-    def _norm(self, image):
-        return (image.float() / 255.0 - self.mean) / self.std
+    def _norm(self, images):
+        return (images.float() / 255.0 - self.mean) / self.std
 
     @abstractmethod
-    def forward_train(self, image, label):
+    def forward_train(self, images, labels):
         pass
 
     @abstractmethod
-    def forward_test(self, image, label):
+    def forward_test(self, images, labels):
         pass
 
     def init(self):
@@ -69,16 +69,16 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
         self._is_init = True
 
     @torch.inference_mode()
-    def slide_inference(self, image):
+    def slide_inference(self, images):
         h_stride, w_stride = self.test_config['stride']
         h_crop, w_crop = self.test_config['crop_size']
         num_classes = self.num_classes
 
-        batch, _, h_img, w_img = image.size()
+        batch, _, h_img, w_img = images.size()
         h_grids = max(h_img - h_crop + h_stride - 1, 0) // h_stride + 1
         w_grids = max(w_img - w_crop + w_stride - 1, 0) // w_stride + 1
-        preds = image.new_zeros((batch, num_classes, h_img, w_img))
-        count_mat = image.new_zeros((batch, 1, h_img, w_img))
+        preds = images.new_zeros((batch, num_classes, h_img, w_img))
+        count_mat = images.new_zeros((batch, 1, h_img, w_img))
         crop_image_list = []
         pad_meta_list = []
 
@@ -91,7 +91,7 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
                 y1 = max(y2 - h_crop, 0)
                 x1 = max(x2 - w_crop, 0)
                 count_mat[:, :, y1:y2, x1:x2] += 1
-                crop_image_list.append(image[:, :, y1:y2, x1:x2])
+                crop_image_list.append(images[:, :, y1:y2, x1:x2])
                 pad_meta_list.append((int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)))
 
         crop_image = torch.cat(crop_image_list, dim=0)

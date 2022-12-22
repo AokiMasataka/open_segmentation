@@ -1,5 +1,5 @@
 from copy import deepcopy
-from .get_params import get_params_beckbone, get_params_decoder, get_params_seg_head
+from .get_params import get_params, get_params_beckbone, get_params_decoder
 
 
 class Registry:
@@ -36,9 +36,9 @@ def build_optimizer(module, config):
     else:
         head_lr = base_lr
     weight_decay = config.pop('weight_decay')
-    params = get_params_beckbone(module=module, lr=base_lr, weight_decay=weight_decay)
-    params += get_params_decoder(module=module, lr=head_lr, weight_decay=weight_decay)
-    params += get_params_seg_head(module=module, lr=head_lr, weight_decay=weight_decay)
+    # params = get_params_beckbone(module=module, lr=base_lr, weight_decay=weight_decay)
+    # params += get_params_decoder(module=module, lr=head_lr, weight_decay=weight_decay)
+    params = get_params(module=module, base_lr=base_lr, head_lr=head_lr, weight_decay=weight_decay)
     config['params'] = params
     optimizer = OPTIMIZERS.build(config=config)
     return optimizer

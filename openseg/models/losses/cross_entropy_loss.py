@@ -14,7 +14,6 @@ def cross_entropy(logits, labels, weight=None, ignore_index=-100, label_smoothin
     b, c, w, h = logits.shape
     logits = logits.permute(0, 2, 3, 1).reshape(b * w * h, c)
     labels = labels.view(b * w * h)
-
     loss = functional.cross_entropy(
         input=logits,
         target=labels,

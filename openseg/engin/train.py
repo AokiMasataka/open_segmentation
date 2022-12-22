@@ -48,10 +48,10 @@ class TrainnerArgs:
 
 
 def train_one_step(model, optimizer, scheduler, batch, scaler, fp16, device):
-    images, labels = batch['image'].cuda(), batch['label'].cuda()
+    images, labels = batch['image'].to(device), batch['label'].to(device)
     optimizer.zero_grad()
     with amp.autocast(enabled=fp16):
-        loss, losses = model.forward_train(image=images, label=labels)
+        loss, losses = model.forward_train(images=images, labels=labels)
     scaler.scale(loss).backward()
     scaler.step(optimizer)
     scaler.update()
@@ -61,7 +61,8 @@ def train_one_step(model, optimizer, scheduler, batch, scaler, fp16, device):
 
 
 def trainner(model, optimizer, scheduler, train_loader, valid_dataset, trainner_args: TrainnerArgs):
-    set_logger(log_file=os.path.join(trainner_args.work_dir, 'train.log'), level=trainner_args.log_level)
+    log_path = os.path.join(trainner_args.work_dir, 'train.log')
+    set_logger(log_file=log_path, level=trainner_args.log_level)
 
     logging.info(f'Python info: {sys.version}')
     logging.info(f'PyTroch version: {torch.__version__}')

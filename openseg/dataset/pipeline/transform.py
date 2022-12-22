@@ -262,8 +262,6 @@ class ShiftScaleRotateShear:
             rotate_limit=45,
             interpolation=cv2.INTER_LINEAR,
             border_mode=cv2.BORDER_REFLECT_101,
-            value=None,
-            mask_value=None,
             shift_limit_x=None,
             shift_limit_y=None,
             shear=0.0,
@@ -275,8 +273,6 @@ class ShiftScaleRotateShear:
         self.rotate_limit = to_tuple(rotate_limit)
         self.interpolation = interpolation
         self.border_mode = border_mode
-        self.value = value
-        self.mask_value = mask_value
         self.shear = shear
         self.prob = prob
 

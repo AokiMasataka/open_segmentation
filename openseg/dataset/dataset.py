@@ -1,5 +1,6 @@
 import os
 import itertools
+from pathlib import Path
 from copy import deepcopy
 import torch
 from torch.utils.data import Dataset
@@ -20,7 +21,7 @@ class CustomDataset(Dataset):
             cache_image=False,
             cache_label=False,
     ):
-        self.split_file = os.path.join(data_root, split)
+        self.split_file = os.path.join(data_root, split) if split is not None else None
         self.image_prefix = os.path.join(data_root, image_prefix)
         self.label_prefix = os.path.join(data_root, label_prefix)
         self.image_suffix = image_suffix
@@ -46,17 +47,29 @@ class CustomDataset(Dataset):
 
     def _load_annotation(self):
         self.ant_data_list = []
-        with open(self.split_file, 'r') as f:
-            splits = f.read().split('\n')
+        if self.split_file is None:
+            file_list = os.listdir(path=self.image_prefix)
 
-        for split in splits:
-            if split == '':
-                continue
-            ant_data = {
-                'image_path': os.path.join(self.image_prefix, split + self.image_suffix),
-                'label_path': os.path.join(self.label_prefix, split + self.label_suffix)
-            }
-            self.ant_data_list.append(ant_data)
+            for file in file_list:
+                file = Path(file).stem
+                ant_data = {
+                    'image_path': os.path.join(self.image_prefix, file + self.image_suffix),
+                    'label_path': os.path.join(self.label_prefix, file + self.label_suffix)
+                }
+                self.ant_data_list.append(ant_data)
+
+        else:
+            with open(self.split_file, 'r') as f:
+                splits = f.read().split('\n')
+
+            for split in splits:
+                if split == '':
+                    continue
+                ant_data = {
+                    'image_path': os.path.join(self.image_prefix, split + self.image_suffix),
+                    'label_path': os.path.join(self.label_prefix, split + self.label_suffix)
+                }
+                self.ant_data_list.append(ant_data)
 
     def _cache_images(self):
         # TODO parallel cache
@@ -75,7 +88,7 @@ class CustomDataset(Dataset):
             del self.pipeline.transforms['LoadAnnotations']
 
     def pre_eval(self, pred, index):
-        assert pred.ndim == 3
+        assert pred.ndim == 3, f'input shape is: {pred.shape}'
         item = self.ant_data_list[index]
         results = self.gt_seg_map_loader(item)
         label = results['label']

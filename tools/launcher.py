@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from openseg.dataset import CustomDataset, InfiniteSampler, train_collate_fn
 from openseg.models import build_model
-from openseg.core import build_optimizer, build_scheduler, DummyScheduler
+from openseg.core import DummyScheduler, build_optimizer, build_scheduler
 from openseg.engin import TrainnerArgs, trainner
 from openseg.utils import load_config_file
 

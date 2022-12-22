@@ -1,5 +1,5 @@
 model = dict(
-    segmenter=dict(type='EncoderDecoder'),
+    type='EncoderDecoder',
     backbone=dict(
         type='ResNet',
         block_type='Bottleneck',
@@ -12,18 +12,18 @@ model = dict(
     ),
     decoder=dict(
         type='UnetHead',
-        encoder_channles=(64, 256, 512, 1024, 2048),
-        decoder_channels=(512, 256, 128, 64, 32),
+        num_classes=151,
+        encoder_dims=(64, 256, 512, 1024, 2048),
+        decoder_dims=(1024, 512, 256, 128, 64),
         num_blocks=5,
-        center_block_config=dict(type='CenterBlock', in_dim=2048),
-        layers=1,
+        center_block_config=dict(type='TransformerCenterBlock', in_dim=2048, num_heads=32, num_layers=2, dropout=0.0),
+        layers=2,
         eps=1e-6,
     ),
     loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
     init_config=None,
     test_config=dict(mode='whole'),
     norm_config=dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    num_classes=10
 )
 
 

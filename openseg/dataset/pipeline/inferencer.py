@@ -112,7 +112,8 @@ class TestTimeAugment:
 
             if original_shape != result['image'].shape[:2]:
                 result['image'] = cv2.resize(src=result['image'], dsize=original_shape, interpolation=cv2.INTER_CUBIC)
-                result['image'] = np.expand_dims(a=result['image'], axis=2)
+                if result['image'].ndim == 2:
+                    result['image'] = np.expand_dims(a=result['image'], axis=2)
             predict_list.append(result['image'])
 
         return sum(predict_list) / predict_list.__len__()
