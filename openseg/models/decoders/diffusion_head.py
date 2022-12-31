@@ -1,6 +1,7 @@
 import math
 import torch
 from torch import nn
+from torch.nn import functional
 from .base import DecoderBase
 from .blocks import ResLayer, BasicTransformer2D
 
@@ -9,7 +10,6 @@ class DiffusionHead(DecoderBase):
     # https://data-analytics.fun/2022/08/24/diffusion-model-pytorch-1/
     def __init__(
         self,
-        input_dim: int,
         num_classes: int,
         context_dim: int = 512,
         encoder_dims: tuple = (64, 128, 256, 512), # TODO channel Mapper
@@ -19,6 +19,7 @@ class DiffusionHead(DecoderBase):
         downblock_types: tuple = ('T', 'T', 'T', 'C'),
         depths: tuple = (2, 1, 1, 1),
         attention_depths: tuple = (1, 1, 1, 1),
+        num_timesteps: int = 200,
         dropout: float = 0.0,
         init_config: dict = None
     ):
@@ -30,17 +31,15 @@ class DiffusionHead(DecoderBase):
         self.context_dim = context_dim
 
         self.time_embed = nn.Sequential(
-            PositionEmbeddings(embed_dim=block_out_dims[0]),
+            TimeEmbeddings(embed_dim=block_out_dims[0]),
             nn.Linear(in_features=block_out_dims[0], out_features=block_out_dims[-1]),
-            nn.SiLU(),
-            nn.Linear(in_features=block_out_dims[-1], out_features=block_out_dims[-1]),
-            nn.SiLU()
+            nn.SELU()
         )
         
         self.downblocks = nn.ModuleList()
         self.upblocks = nn.ModuleList()
         next_dim = block_out_dims[1]
-        prov_dim = input_dim
+        prov_dim = num_classes
         block_out_dims = block_out_dims + (0,)
 
         for i in range(num_layers):
@@ -90,7 +89,6 @@ class DiffusionHead(DecoderBase):
         self.upblocks = self.upblocks[::-1]
     
     def forward(self, hidden_state, context, timestep):
-        assert timestep.ndim == 1
         time_embeds = self.time_embed(timestep)
 
         cat_states = list()
@@ -109,6 +107,7 @@ class DiffusionHead(DecoderBase):
         return hidden_state
 
 
+
 class DiffusionBlock(nn.Module):
     def __init__(
         self,
@@ -124,13 +123,19 @@ class DiffusionBlock(nn.Module):
         upsampling: int = False,
         downsampling: int = False,
         attention_module: bool = True,
+        eps: float = 1e-5
     ):
         super(DiffusionBlock, self).__init__()
         assert not (upsampling and downsampling)
         self.output_dim = output_dim
         self.attention_module = attention_module
 
-        self.time_embed_proj = nn.Linear(time_embed_dim, output_dim, bias=True)
+        self.time_embed_proj = nn.Sequential(
+            nn.Linear(in_features=time_embed_dim, out_features=output_dim, bias=True),
+            nn.SiLU(),
+            nn.Linear(in_features=output_dim, out_features=output_dim, bias=True)
+        )
+        
 
         self.attentions = nn.ModuleList()
         self.resblocks = nn.ModuleList()
@@ -138,16 +143,17 @@ class DiffusionBlock(nn.Module):
         for i in range(num_layers):
             embed_dim = embed_dim if i == 0 else output_dim
             self.resblocks.append(
-                ResLayer(in_dim=embed_dim, out_dim=output_dim, eps=1e-6, activation='swish', dropout=conv_drop, extend=2)
+                ResLayer(in_dim=embed_dim, out_dim=output_dim, eps=eps, activation='swish', dropout=conv_drop, extend=2)
             )
             if attention_module:
                 self.attentions.append(
                     BasicTransformer2D(
                         embed_dim=output_dim,
-                        dim_cross=context_dim,
+                        cross_dim=context_dim,
                         num_heads=num_heads,
                         num_layers=num_layers_attn,
-                        dropout=attn_drop
+                        dropout=attn_drop,
+                        eps=eps
                     )
                 )
             else:
@@ -176,9 +182,9 @@ class DiffusionBlock(nn.Module):
         return hidden_state
 
 
-class PositionEmbeddings(nn.Module):
+class TimeEmbeddings(nn.Module):
   def __init__(self, embed_dim):
-    super(PositionEmbeddings, self).__init__()
+    super(TimeEmbeddings, self).__init__()
     half_dim = embed_dim // 2
     embeddings = math.log(10000) / (half_dim - 1)
     embeddings = torch.exp(torch.arange(half_dim) * -embeddings)

@@ -24,6 +24,7 @@ class Registry:
 
 BACKBONES = Registry(name='backbones')
 DECODERS = Registry(name='decoders')
+NECKS = Registry(name='necks')
 LOSSES = Registry(name='losses')
 SEGMENTER = Registry(name='segmenters')
 

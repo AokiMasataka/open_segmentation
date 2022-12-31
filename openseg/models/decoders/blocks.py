@@ -106,38 +106,24 @@ class ResLayer(nn.Module):
 
 
 class CenterBlock(nn.Sequential):
-    def __init__(self, in_dim):
-        conv1 = nn.Conv2d(
-            in_dim,
-            in_dim,
-            kernel_size=(3, 3),
-            stride=(1, 1),
-            padding=1,
-            bias=False
+    def __init__(self, in_dim, eps=1e-5, activation_fn='relu'):
+        activation_fns = {'relu': nn.ReLU, 'gelu': nn.GELU, 'silu': nn.SiLU}
+        super().__init__(
+            nn.Conv2d(in_dim, in_dim, kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False),
+            nn.BatchNorm2d(in_dim, eps=eps),
+            activation_fns[activation_fn](),
+            nn.Conv2d(in_dim, in_dim, kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False),
+            nn.BatchNorm2d(in_dim, eps=eps),
+            activation_fns[activation_fn](),
         )
-        bn1 = nn.BatchNorm2d(in_dim)
-        activate1 = nn.ReLU()
-
-        conv2 = nn.Conv2d(
-            in_dim,
-            in_dim,
-            kernel_size=(3, 3),
-            stride=(1, 1),
-            padding=1,
-            bias=False
-        )
-        bn2 = nn.BatchNorm2d(in_dim)
-        activate2 = nn.ReLU()
-
-        super().__init__(conv1, bn1, activate1, conv2, bn2, activate2)
 
 
 class TransformerEncoderLayer(nn.Module):
-    def __init__(self, in_dim:  int, num_heads: int, dropout: float = 0.0, eps: float = 1e-6):
+    def __init__(self, in_dim:  int, num_heads: int, dropout: float = 0.0, eps: float = 1e-5):
         super(TransformerEncoderLayer, self).__init__()
-        self.attention = SelfAttention(dim_query=in_dim, num_heads=num_heads, dropout=dropout)
+        self.attention = SelfAttention(embed_dim=in_dim, num_heads=num_heads, dropout=dropout, relative_pos_bias=True)
         self.attention_norm = nn.LayerNorm(in_dim, eps=eps)
-        self.ffn = FeedForward(dim=in_dim, dropout=dropout, activation_fn='gelu')
+        self.ffn = FeedForward(input_dim=in_dim, dropout=dropout, activation_fn='gelu')
         self.ffn_norm = nn.LayerNorm(in_dim, eps=eps)
     
     def forward(self, x):
@@ -147,14 +133,14 @@ class TransformerEncoderLayer(nn.Module):
 
 
 class BasicTransformerLayer(nn.Module):
-    def __init__(self, embed_dim, dim_cross, num_heads, dropout=0.0):
+    def __init__(self, embed_dim, cross_dim, num_heads, dropout=0.0, eps=1e-5):
         super(BasicTransformerLayer, self).__init__()
-        self.cross_attn = CrossAttention(dim_query=embed_dim, dim_cross=dim_cross, num_heads=num_heads, dropout=dropout)
-        self.cross_norm = nn.LayerNorm(embed_dim, eps=1e-6)
-        self.self_attn = SelfAttention(dim_query=embed_dim, num_heads=num_heads, dropout=dropout)
-        self.self_norm = nn.LayerNorm(embed_dim, eps=1e-6)
-        self.ffn = FeedForward(dim=embed_dim, dropout=dropout, activation_fn='gelu')
-        self.ffn_norm = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.cross_attn = CrossAttention(embed_dim=embed_dim, cross_dim=cross_dim, num_heads=num_heads, dropout=dropout, relative_pos_bias=True)
+        self.cross_norm = nn.LayerNorm(embed_dim, eps=eps)
+        self.self_attn = SelfAttention(embed_dim=embed_dim, num_heads=num_heads, dropout=dropout, relative_pos_bias=True)
+        self.self_norm = nn.LayerNorm(embed_dim, eps=eps)
+        self.ffn = FeedForward(input_dim=embed_dim, dropout=dropout, activation_fn='gelu')
+        self.ffn_norm = nn.LayerNorm(embed_dim, eps=eps)
     
     def forward(self, hidden_state, context):
         hidden_state = self.cross_attn(self.cross_norm(hidden_state), context) + hidden_state
@@ -164,9 +150,8 @@ class BasicTransformerLayer(nn.Module):
 
 
 class TransformerCenterBlock(nn.Module):
-    def __init__(self, in_dim: int, num_heads: int, max_pos: int, num_layers: int = 1, dropout: float = 0.0, eps: float = 1e-6):
+    def __init__(self, in_dim: int, num_heads: int, num_layers: int = 1, dropout: float = 0.0, eps: float = 1e-5):
         super(TransformerCenterBlock, self).__init__()
-        self.pos_embedding = PositionEmbedding(embed_dim=in_dim, max_position=max_pos)
         layers = list()
         for _ in range(num_layers):
             layers.append(TransformerEncoderLayer(in_dim, num_heads, dropout, eps))
@@ -176,19 +161,16 @@ class TransformerCenterBlock(nn.Module):
     def forward(self, x):
         B, C, W, H = x.shape
         x = x.view(B, C, W * H).transpose(1, 2)
-
-        x = self.pos_embedding(hidden_state=x)
         x = self.layers(x)
-
         x = x.transpose(1, 2).view(B, C, W, H)
         return x
 
 
 class BasicTransformer2D(nn.Module):
-    def __init__(self, embed_dim, dim_cross, num_heads, num_layers, dropout=0.0):
+    def __init__(self, embed_dim, cross_dim, num_heads, num_layers, dropout=0.0, eps=1e-5):
         super(BasicTransformer2D, self).__init__()
         blocks = [BasicTransformerLayer(
-            embed_dim=embed_dim, dim_cross=dim_cross, num_heads=num_heads, dropout=dropout
+            embed_dim=embed_dim, cross_dim=cross_dim, num_heads=num_heads, dropout=dropout, eps=eps
         ) for _ in range(num_layers)]
         self.blocks = nn.ModuleList(blocks)
     
@@ -200,14 +182,3 @@ class BasicTransformer2D(nn.Module):
             hidden_state = block(hidden_state, context)
         
         return hidden_state.transpose(1, 2).view(B, C, W, H)
-    
-
-class PositionEmbedding(nn.Module):
-    def __init__(self, embed_dim: int, max_position: int = 16 * 16):
-        super(PositionEmbedding, self).__init__()
-        self.embeddings = nn.Parameter(torch.Tensor(1, max_position, embed_dim))
-
-    def forward(self, hidden_state):
-        _, N, _ = hidden_state.shape
-        hidden_state = hidden_state + self.embeddings[:, :N, :]
-        return hidden_state

@@ -49,11 +49,3 @@ class EncoderDecoder(SegmentorBase):
             return self(images=images)
         elif self.test_config['mode'] == 'slide':
             return self.slide_inference(images=images)
-
-    @force_fp32
-    def _get_loss(self, logits, labels):
-        losses = {}
-        for loss_name, loss_fn in zip(self.losses.keys(), self.losses.values()):
-            losses[loss_name] = loss_fn(logits, labels)
-        loss = sum(losses.values())
-        return loss, losses

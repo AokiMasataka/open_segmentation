@@ -20,4 +20,3 @@ class DecoderBase(nn.Module):
             
             if self.init_config.get('', False):
                 pass
-                

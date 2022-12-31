@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 import torch
 from torch import nn
 from torch.nn import functional
+from openseg.utils.torch_utils import force_fp32
 
 
 class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
@@ -31,6 +32,19 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
 
     def _norm(self, images):
         return (images.float() / 255.0 - self.mean) / self.std
+    
+    def init(self):
+        if self.init_config is not None:
+            if self.init_config.get('pretrained', False):
+                state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
+
+                for key in self.state_dict.keys():
+                    if key in state_dict.keys():
+                        if state_dict[key].shape == self.state_dict[key].shape:
+                            self.state_dict[key] = state_dict[key]
+
+        if self.test_config is None:
+            self.test_config = dict(mode='whole')
 
     @abstractmethod
     def forward_train(self, images, labels):
@@ -40,33 +54,13 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
     def forward_test(self, images, labels):
         pass
 
-    def init(self):
-        if self.init_config is not None:
-            try:
-                self.load_weight()
-            except:
-                self.init_weight()
-        else:
-            self.init_weight()
-
-        if self.test_config is None:
-            self.test_config = dict(mode='whole')
-
-    @property
-    def is_init(self):
-        return self._is_init
-
-    def init_weight(self):
-        self._is_init = True
-
-    def load_weight(self):
-        weight_path = self.init_config.get('weight_path', None)
-        if weight_path is not None:
-            state_dict = torch.load(weight_path, map_location='cpu')
-            miss_match_key = self.load_state_dict(state_dict, strict=False)
-            print(miss_match_key)
-
-        self._is_init = True
+    @force_fp32
+    def _get_loss(self, logits, labels):
+        losses = dict()
+        for loss_name, loss_fn in self.losses.items():
+            losses[loss_name] = loss_fn(logits, labels)
+        loss = sum(losses.values())
+        return loss, losses
 
     @torch.inference_mode()
     def slide_inference(self, images):

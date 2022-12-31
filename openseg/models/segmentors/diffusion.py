@@ -2,7 +2,6 @@ import torch
 from torch import nn
 from .base import SegmentorBase
 from ..builder import SEGMENTER, BACKBONES, DECODERS, LOSSES
-from openseg.utils.torch_utils import force_fp32
 
 
 @SEGMENTER.register_module
@@ -11,7 +10,8 @@ class Diffusion(SegmentorBase):
         self,
         backbone: dict,
         decoder: dict,
-        loss: dict,
+        losses: dict,
+        joiner: dict = dict(type='last_layer', input_dim=None, output_dim=None),
         test_config: dict = None,
         init_config: dict = None,
         norm_config: dict = None,
@@ -26,27 +26,24 @@ class Diffusion(SegmentorBase):
         self.maxtime = timesteps
         self.backbone = BACKBONES.build(config=backbone)
         self.decoder = DECODERS.build(config=decoder)
-        self.losses = LOSSES.build(config=loss)
-
+        self.losses = LOSSES.build(config=losses)
         self.noise_generator = NoiseGenerator(timesteps=timesteps)
 
         self.init()
     
-    def forward(self, images, num_steps=10):
-        noise = torch.randn_like(images)
-        feats = self.backbone(images)
-        for i in reversed(range(num_steps)):
-            timestep = torch.tensor([i], dtype=torch.long, device=images.device)
-            denoise = self.decoder(hidden_state=noise, context=feats[0], timestep=timestep)
-            noise = noise - denoise
-        return noise
+    def forward_feature(self, images):
+        images = self.norm_fn(images=images)
+        features = self.backbone(images)
+        context = self.somthing(features)
+        return context
 
     def forward_train(self, images, labels):
-        timestep = torch.randint(low=0, high=self.maxtime, size=images.shape[0])
-        noisy_label, noise = self.noise_generator(images=labels, timestep=timestep)
+        context = self.forward_feature(images=images)
 
-        feats = self.backbone(images)
-        logits = self.decoder(hidden_state=noisy_label, context=feats[0], timestep=timestep)
+        timestep = torch.randint(low=0, high=self.maxtime, size=images.shape[0])
+        noisy_labels, noise = self.noise_generator(images=labels, timestep=timestep)
+
+        logits = self.decoder(hidden_state=noisy_labels, context=context, timestep=timestep)
 
         loss, losses = self._get_loss(logits=logits, labels=noise)
         return loss, losses
@@ -55,18 +52,11 @@ class Diffusion(SegmentorBase):
         logits = self(images, num_steps)
         loss, _ = self._get_loss(logits=logits, labels=labels)
         return loss
-    
-    @force_fp32
-    def _get_loss(self, logits, labels):
-        losses = {}
-        for loss_name, loss_fn in zip(self.losses.keys(), self.losses.values()):
-            losses[loss_name] = loss_fn(logits, labels)
-        loss = sum(losses.values())
-        return loss, losses
 
 
-class NoiseGenerator:
+class NoiseGenerator(nn.Module):
     def __init__(self, timesteps):
+        super(NoiseGenerator, self).__init__()
         self.timesteps = timesteps
         beta_start = 0.0001
         beta_end = 0.02
@@ -74,8 +64,8 @@ class NoiseGenerator:
 
         alphas = 1. - betas
         alphas_cumprod = torch.cumprod(alphas, axis=0)
-        self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
+        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
+        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
 
     def __call__(self, labels, timestep):
         noise = torch.randn_like(labels)
