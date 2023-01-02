@@ -1,15 +1,18 @@
 def load_config_file(path):
     with open(path, 'r') as f:
         text = f.read()
+    
     config = dict()
     exec(text, globals(), config)
 
     if '_base_' in config.keys():
         for base_config_path in config['_base_']:
-            base_config = load_config_file(path=base_config_path)
+            base_config, _ = load_config_file(path=base_config_path)
             config = merge_configs(config=config, base_config=base_config)
 
-    text = str(config)
+    text = ''
+    for key, value in config.items():
+        text += str(key) + '=' + str(value) + '\n'
     return config, text
 
 

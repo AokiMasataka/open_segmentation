@@ -1,3 +1,4 @@
+import torch
 from copy import deepcopy
 
 
@@ -29,11 +30,18 @@ LOSSES = Registry(name='losses')
 SEGMENTER = Registry(name='segmenters')
 
 
-def build_model(config):
+def build_model(config, pretrained_weight=None):
     config['init_config'] = config.get('init_config', None)
     config['test_config'] = config.get('test_config', None)
     config['norm_config'] = config.get('norm_config', None)
     segmenter_module = SEGMENTER.get_module(config.pop('type'))
+    if pretrained_weight is not None:
+        if config['init_config'] is None:
+            config['init_config'] = dict(pretrained=pretrained_weight)
+        else:
+            config['init_config']['pretrained'] = pretrained_weight
     model = segmenter_module(**config)
+    
+        
     return model
 

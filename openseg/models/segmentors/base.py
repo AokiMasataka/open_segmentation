@@ -38,7 +38,7 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
             if self.init_config.get('pretrained', False):
                 state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
 
-                for key in self.state_dict.keys():
+                for key in self.state_dict():
                     if key in state_dict.keys():
                         if state_dict[key].shape == self.state_dict[key].shape:
                             self.state_dict[key] = state_dict[key]

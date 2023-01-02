@@ -19,7 +19,6 @@ class DiffusionHead(DecoderBase):
         downblock_types: tuple = ('T', 'T', 'T', 'C'),
         depths: tuple = (2, 1, 1, 1),
         attention_depths: tuple = (1, 1, 1, 1),
-        num_timesteps: int = 200,
         dropout: float = 0.0,
         init_config: dict = None
     ):
