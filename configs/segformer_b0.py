@@ -1,8 +1,7 @@
 model = dict(
-    segmenter=dict(type='EncoderDecoder'),
+    type='EncoderDecoder',
     backbone=dict(
         type='MixVisionTransformer',
-        pretrained='https://github.com/qubvel/segmentation_models.pytorch/releases/download/v0.0.2/mit_b0.pth',
         embed_dims=(32, 64, 160, 256),
         num_heads=(1, 2, 5, 8),
         mlp_ratios=(4, 4, 4, 4),
@@ -11,18 +10,19 @@ model = dict(
         sr_ratios=[8, 4, 2, 1],
         drop_rate=0.0,
         drop_path_rate=0.1,
+        init_config=dict(pretrained='https://github.com/qubvel/segmentation_models.pytorch/releases/download/v0.0.2/mit_b0.pth')
     ),
     decoder=dict(
         type='SegFormerHead',
-        in_channels=(32, 64, 160, 256),
+        num_classes=151,
+        input_dims=(32, 64, 160, 256),
         embedding_dim=256,
         drop_prob=0.0
     ),
-    loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
+    loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.0, loss_weight=1.0)],
     init_config=None,
     test_config=dict(mode='whole'),
     norm_config=dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    num_classes=10
 )
 
 train_pipeline = [

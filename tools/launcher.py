@@ -44,8 +44,15 @@ def main():
 
     warnings.simplefilter('ignore', UserWarning)
     config_file = args.config
-    config, text = load_config_file(config_file)
+    config = load_config_file(config_file)
     os.makedirs(config['work_dir'], exist_ok=True)
+
+    text = ''
+    for key, value in config.items():
+        if isinstance(value, str):
+            value = "'" + value + "'"
+        text += key + ' = ' + str(value) + '\n'
+
     with open(config['work_dir'] + '/config.py', 'w') as f:
         f.write(text)
 

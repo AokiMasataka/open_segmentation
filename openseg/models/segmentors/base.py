@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from abc import ABCMeta, abstractmethod
 
@@ -34,14 +35,43 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
         return (images.float() / 255.0 - self.mean) / self.std
     
     def init(self):
-        if self.init_config is not None:
-            if self.init_config.get('pretrained', False):
-                state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
+        if self.init_config.get('pretrained', False):
+            state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
+            if 'model' in state_dict.keys():
+                state_dict = state_dict['model']
 
-                for key in self.state_dict():
-                    if key in state_dict.keys():
-                        if state_dict[key].shape == self.state_dict[key].shape:
-                            self.state_dict[key] = state_dict[key]
+            match_keys = []
+            miss_match_keys = []
+            for key, value in state_dict.items():
+                miss_match = True
+                if key in self.state_dict().keys():
+                    if self.state_dict()[key].shape == value.shape:
+                        self.state_dict()[key] = value
+                        miss_match = False
+                        match_keys.append(key)
+                if miss_match:
+                    miss_match_keys.append(key)
+            
+            logging.info(msg='segmentor: match keys:')
+            if self.init_config.get('print_match_key', False):
+                print('segmentor: match keys:')
+            for match_key in match_keys:
+                logging.info(msg=f'    {match_key}')
+                if self.init_config.get('print_match_key', False):
+                    print('    ', match_key)
+                
+            logging.info(msg='segmentor: miss match keys:')
+            if self.init_config.get('print_miss_match_key', False):
+                print('segmentor: miss match keys:')
+            for miss_match_key in miss_match_keys:
+                logging.info(msg=f'    {miss_match_key}')
+                if self.init_config.get('print_miss_match_key', False):
+                    print('    ', miss_match_key)
+
+            logging.info(msg=f'segmentor: number of match keys: {match_keys.__len__()}')
+            logging.info(msg=f'segmentor: number of miss match keys: {miss_match_keys.__len__()}')
+            print(f'segmentor: number of match keys: {match_keys.__len__()}')
+            print(f'segmentor: number of miss match keys: {miss_match_keys.__len__()}')
 
         if self.test_config is None:
             self.test_config = dict(mode='whole')

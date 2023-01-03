@@ -19,10 +19,10 @@ def main():
     parser.add_argument('-f', '--files', type=str, help='image path or dir')
     parser.add_argument('-d', '--device', type=str, default='cpu', help='select device')
     parser.add_argument('-e', '--ecport', type=str, default=None, help='output path')
-    parser.add_argument('-s', '--show', type=bool, action='store_true', help='show mask image')
+    parser.add_argument('-s', '--show', action='store_true', help='show mask image')
     args = parser.parse_args()
 
-    config, text = load_config_file(args.config)
+    config = load_config_file(args.config)
 
     model, pipeline = build_model_and_pipeline(config=config, weight=args.weight, device=args.device)
     num_classes = model.num_classes
