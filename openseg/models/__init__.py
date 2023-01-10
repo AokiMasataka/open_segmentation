@@ -1,5 +1,5 @@
-from .builder import build_model
+from .builder import build_segmentor
 from .backbones import *
-from .decoders import Unet, SegFormerHead
-from .losses import CrossEntropyLoss, DiceLoss
+from .decoders import UnetHead, SegFormerHead
+from .losses import DiceLoss, IOULoss, CrossEntropyLoss
 from .segmentors import EncoderDecoder

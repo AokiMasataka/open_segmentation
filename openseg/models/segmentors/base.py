@@ -1,18 +1,16 @@
+import logging
 from copy import deepcopy
-from abc import ABCMeta, abstractmethod
-
 import torch
 from torch import nn
 from torch.nn import functional
 
 
-class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
-    def __init__(self, num_classes, test_config=None, norm_config=None, init_config=None):
-        super().__init__()
-        self._is_init = False
-        self.test_config = deepcopy(test_config)
-        self.norm_config = deepcopy(norm_config)
+class SegmentorBase(nn.Module):
+    def __init__(self, init_config: dict = None, norm_config: dict = None, test_config: dict = dict(mode='whole')):
+        super(SegmentorBase, self).__init__()
         self.init_config = deepcopy(init_config)
+        self.norm_config = deepcopy(norm_config)
+        self.test_config = deepcopy(test_config)
 
         if self.norm_config is not None:
             assert self.norm_config['mean'].__len__() == self.norm_config['std'].__len__()
@@ -22,63 +20,74 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
             self.register_buffer('mean', mean)
             self.register_buffer('std', std)
             self.norm_fn = self._norm
+            self.div = norm_config.get('div', None)
         else:
             self.mean = None
             self.std = None
+            self.div = None
             self.norm_fn = nn.Identity()
+        
+        if test_config is not None:
+            self.test_mode = test_config.get('mode', 'whole')
+        else:
+            self.test_mode = 'whole'
 
-        self.num_classes = num_classes
-
-    def _norm(self, image):
-        return (image.float() / 255.0 - self.mean) / self.std
-
-    @abstractmethod
-    def forward_train(self, image, label):
-        pass
-
-    @abstractmethod
-    def forward_test(self, image, label):
-        pass
-
+    def _norm(self, images):
+        if self.div is None:
+            return (images - self.mean) / self.std
+        else:
+            return (images / self.div - self.mean) / self.std
+    
+    def _get_losses(self, predicts, labels):
+        predicts = predicts.float()
+        losses = dict()
+        for loss_name, loss_func in self.losses.items():
+            losses[loss_name] = loss_func(predicts=predicts, labels=labels)
+        loss = sum(losses.values())
+        return loss, losses
+    
     def init(self):
         if self.init_config is not None:
-            try:
-                self.load_weight()
-            except:
-                self.init_weight()
-        else:
-            self.init_weight()
+            if self.init_config.get('pretrained', False):
+                state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
+                match_keys = list()
+                miss_match_keys = list()
 
-        if self.test_config is None:
-            self.test_config = dict(mode='whole')
-
-    @property
-    def is_init(self):
-        return self._is_init
-
-    def init_weight(self):
-        self._is_init = True
-
-    def load_weight(self):
-        weight_path = self.init_config.get('weight_path', None)
-        if weight_path is not None:
-            state_dict = torch.load(weight_path, map_location='cpu')
-            miss_match_key = self.load_state_dict(state_dict, strict=False)
-            print(miss_match_key)
-
-        self._is_init = True
+                for key, value in state_dict.items():
+                    miss_match = True
+                    if key in self.state_dict().keys():
+                        if self.state_dict()[key].shape == value.shape:
+                            self.state_dict()[key] = value
+                            miss_match = False
+                            match_keys.append(key)
+                    if miss_match:
+                        miss_match_keys.append(key)
+            
+            if self.init_config.get('log_kys', False):
+                print('segmentor match keys:')
+                for match_key in match_keys:
+                    print(f'    {match_key}')
+                
+                print('segmentor miss match keys:')
+                for miss_match_key in miss_match_keys:
+                    print(f'    {miss_match_key}')
+                print(f'segmentor match keys: {match_keys.__len__()}')
+                print(f'segmentor miss match keys: {miss_match_keys.__len__()}')
+            
+            logging.info(msg=f'segmentor match keys: {match_keys.__len__()}')
+            logging.info(msg=f'segmentor miss match keys: {miss_match_keys.__len__()}')
+            
 
     @torch.inference_mode()
-    def slide_inference(self, image):
+    def slide_inference(self, images):
         h_stride, w_stride = self.test_config['stride']
         h_crop, w_crop = self.test_config['crop_size']
-        num_classes = self.num_classes
 
-        batch, _, h_img, w_img = image.size()
+        batch, _, h_img, w_img = images.size()
         h_grids = max(h_img - h_crop + h_stride - 1, 0) // h_stride + 1
         w_grids = max(w_img - w_crop + w_stride - 1, 0) // w_stride + 1
-        preds = image.new_zeros((batch, num_classes, h_img, w_img))
-        count_mat = image.new_zeros((batch, 1, h_img, w_img))
+        preds = images.new_zeros((batch, self.num_classes, h_img, w_img))
+        count_mat = images.new_zeros((batch, 1, h_img, w_img))
         crop_image_list = []
         pad_meta_list = []
 
@@ -91,7 +100,7 @@ class SegmentorBase(torch.nn.Module, metaclass=ABCMeta):
                 y1 = max(y2 - h_crop, 0)
                 x1 = max(x2 - w_crop, 0)
                 count_mat[:, :, y1:y2, x1:x2] += 1
-                crop_image_list.append(image[:, :, y1:y2, x1:x2])
+                crop_image_list.append(images[:, :, y1:y2, x1:x2])
                 pad_meta_list.append((int(x1), int(preds.shape[3] - x2), int(y1), int(preds.shape[2] - y2)))
 
         crop_image = torch.cat(crop_image_list, dim=0)

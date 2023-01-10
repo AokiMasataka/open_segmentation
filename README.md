@@ -20,20 +20,27 @@ Basically, it is written as follows
 
 ```python
 model = dict(
-    segmenter=dict(
-        type='EncoderDecoder',
-    ),
+    segmenter=dict(type='EncoderDecoder'),
     backbone=dict(
-        type='resnet50',
-        pretrained=True,
-        n_blocks=5,
+        type='ResNet',
+        block_type='Bottleneck',
+        layers=(3, 4, 6, 3),
+        in_channels=3,
+        stem_width=64,
+        channels=(256, 512, 1024, 2048),
+        act_config=dict(type='ReLU', inplace=True),
+        init_config=dict(pretrained='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/seresnet50_ra_224-8efdb4bb.pth')
     ),
     decoder=dict(
-        type='Unet',
-        decoder_channels=(256, 128, 64, 32, 16),
-        n_blocks=5,
+        type='UnetHead',
+        encoder_channles=(64, 256, 512, 1024, 2048),
+        decoder_channels=(512, 256, 128, 64, 32),
+        num_blocks=5,
+        center_block_config=dict(type='CenterBlock', in_dim=2048),
+        layers=1,
+        eps=1e-6,
     ),
-    loss=[dict(type='CrossEntropyLoss', mode='bce', label_smooth=0.01, loss_weight=1.0)],
+    loss=[dict(type='CrossEntropyLoss', mode='multiclass', label_smooth=0.01, loss_weight=1.0)],
     init_config=None,
     test_config=dict(mode='whole'),
     norm_config=dict(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),

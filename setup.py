@@ -12,7 +12,7 @@ AUTHOR = None
 REQUIRES_PYTHON = '>=3.8.0'
 VERSION = __version__
 
-INSTALL_REQUIRES = ['torch', 'torchvision', 'timm', 'tqdm', 'openbacks']
+INSTALL_REQUIRES = ['torch', 'torchvision', 'tqdm', 'openbacks']
 EXTRAS_REQUIRE = {}
 PACKAGES = ['openseg']
 

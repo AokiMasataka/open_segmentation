@@ -1,13 +1,14 @@
 import torch
 from torch import nn
 from torch.nn import functional
-from .base import DecoderBase, DecoderBlock
+from .base import DecoderBase
+from .blocks import ResBlock
 from ..builder import DECODERS
 
 
 class MLP(nn.Module):
-    def __init__(self, input_dim=2048, embed_dim=768):
-        super().__init__()
+    def __init__(self, input_dim: int = 2048, embed_dim: int = 768):
+        super(MLP, self).__init__()
         self.proj = nn.Linear(input_dim, embed_dim)
 
     def forward(self, x):
@@ -16,13 +17,17 @@ class MLP(nn.Module):
 
 @DECODERS.register_module
 class SegFormerHead(DecoderBase):
-    """
-    SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers
-    """
-    def __init__(self, in_channels=(32, 64, 160, 256), embedding_dim=256, drop_prob=0.0):
+    def __init__(
+        self,
+        num_classes: int,
+        encoder_dims: tuple = (32, 64, 160, 256),
+        embedding_dim: int = 256,
+        drop_prob: float = 0.0,
+        eps: float = 1e-5
+    ):
         super(SegFormerHead, self).__init__()
         self._decoder_channels = [embedding_dim]
-        c1_in_channels, c2_in_channels, c3_in_channels, c4_in_channels = in_channels
+        c1_in_channels, c2_in_channels, c3_in_channels, c4_in_channels = encoder_dims
 
         self.linear_c4 = MLP(input_dim=c4_in_channels, embed_dim=embedding_dim)
         self.linear_c3 = MLP(input_dim=c3_in_channels, embed_dim=embedding_dim)
@@ -30,12 +35,20 @@ class SegFormerHead(DecoderBase):
         self.linear_c1 = MLP(input_dim=c1_in_channels, embed_dim=embedding_dim)
 
         self.linear_fuse = nn.Sequential(
-            nn.Conv2d(in_channels=embedding_dim * 4, out_channels=embedding_dim, kernel_size=(1, 1)),
-            nn.BatchNorm2d(num_features=embedding_dim),
+            nn.Conv2d(in_channels=embedding_dim * 4, out_channels=embedding_dim, kernel_size=(1, 1), bias=False),
+            nn.BatchNorm2d(num_features=embedding_dim, eps=eps),
         )
 
         self.dropout = nn.Dropout2d(p=drop_prob)
-        self.linear_pred = DecoderBlock(in_ch=embedding_dim, out_ch=embedding_dim, scale_factor=4, mode='bilinear')
+        self.linear_pred = ResBlock(
+            input_dim=embedding_dim,
+            output_dim=embedding_dim,
+            layers=2,
+            upsample=4,
+            eps=eps
+        )
+
+        self.head =  nn.Conv2d(embedding_dim, num_classes, kernel_size=(1, 1), stride=(1, 1), padding=0)
 
     def forward(self, x):
         c1, c2, c3, c4 = x
@@ -56,4 +69,4 @@ class SegFormerHead(DecoderBase):
 
         _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
         x = self.linear_pred(self.dropout(_c))
-        return x
+        return self.head(x)

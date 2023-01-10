@@ -1,69 +1,54 @@
-from torch import nn
-
+import torch
 from .base import SegmentorBase
-from ..builder import SEGMENTER
-from openseg.utils.torch_utils import force_fp32
+from ..builder import SEGMENTORS, BACKBONES, DECODERS, LOSSES
 
 
-@SEGMENTER.register_module
+@SEGMENTORS.register_module
 class EncoderDecoder(SegmentorBase):
     def __init__(
-            self,
-            backbone,
-            decoder,
-            losses,
-            num_classes=1,
-            test_config=None,
-            init_config=None,
-            norm_config=None
+        self,
+        backbone: dict,
+        decoder: dict,
+        loss: dict,
+        init_config: dict = None,
+        norm_config: dict = None,
+        test_config: dict = dict(mode='whole')
     ):
         super(EncoderDecoder, self).__init__(
-            num_classes=num_classes,
-            test_config=test_config,
             init_config=init_config,
-            norm_config=norm_config
+            norm_config=norm_config,
+            test_config=test_config
         )
 
-        self.backbone = backbone
-        self.decoder = decoder
-        self.losses = losses
-
-        self.seg_head = nn.Conv2d(
-            in_channels=decoder.decoder_out_dim(),
-            out_channels=num_classes,
-            kernel_size=(3, 3),
-            stride=(1, 1),
-            padding=(1, 1)
-        )
-
+        self.backbone = BACKBONES.build(config=backbone)
+        self.decoder = DECODERS.build(config=decoder)
+        self.losses = LOSSES.build(config=loss)
         self.init()
-
-    def forward(self, image):
-        image = self.norm_fn(image=image)
-        decode_out = self.decoder(self.backbone(image))
-        return self.seg_head(decode_out)
-
-    def forward_train(self, image, label):
-        logit = self(image)
-        loss, losses = self._get_loss(logit, label)
+    
+    def forward(self, images: torch.Tensor):
+        """
+        images: Tensor (batch, dim, w, h)
+        """
+        features = self.backbone(self.norm_fn(images=images))
+        return self.decoder(features)
+    
+    def forward_train(self, images: torch.Tensor, labels: torch.Tensor):
+        """
+        Args:
+            images: Tensor (batch, dim, w, h)
+            labels: Tensor (batch, w, h)
+        """
+        predicts = self(images=images)
+        loss, losses = self._get_losses(predicts=predicts, labels=labels)
         return loss, losses
+    
+    @torch.inference_mode()
+    def forward_test(self, images):
+        if self.test_mode == 'whole':
+            return self(images=images)
+        else:
+            return self.slide_inference(images=images)
 
-    def forward_test(self, image, label):
-        logit = self(image)
-        loss, _ = self._get_loss(logit, label)
-        return {'loss': loss, 'logit': logit}
-
-    def forward_inference(self, image):
-        if self.test_config['mode'] == 'whole':
-            return self(image=image)
-        elif self.test_config['mode'] == 'slide':
-            return self.slide_inference(image=image)
-
-    @force_fp32
-    def _get_loss(self, logit, label):
-        losses = {}
-        for loss_name, loss_fn in zip(self.losses.keys(), self.losses.values()):
-            losses[loss_name] = loss_fn(logit, label)
-        loss = sum(losses.values())
-        return loss, losses
-
+    @property
+    def num_classes(self):
+        return self.decoder.num_classes

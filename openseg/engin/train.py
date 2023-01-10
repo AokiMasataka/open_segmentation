@@ -1,12 +1,49 @@
 import os
 import sys
+import copy
 import logging
-from copy import deepcopy
+import warnings
+import itertools
 import torch
 from torch.cuda import amp
+from torch.utils.data import DataLoader
+from .evalate import evalate
+from ..dataset import CustomDataset, InfiniteSampler
+from ..models import build_segmentor
+from ..core import DummyScheduler, build_optimizer, build_scheduler
+from ..utils import set_logger, seed_everything
 
-from .evaluate import evaluate_fn
-from ..utils.logger import set_logger
+
+def build_train_componet(config: dict):
+    data_config = config['data']
+    train_dataset = CustomDataset(**data_config['train'])
+    valid_dataset = CustomDataset(**data_config['valid'])
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=data_config['train_batch_size'],
+        num_workers=data_config.get('num_workers', os.cpu_count()),
+        collate_fn=CustomDataset.train_collate_fn,
+        sampler=InfiniteSampler(dataset_size=train_dataset.__len__()),
+        # pin_memory=True
+    )
+
+    valid_loader = DataLoader(
+        dataset=valid_dataset,
+        batch_size=data_config['valid_batch_size'],
+        num_workers=data_config.get('num_workers', os.cpu_count()),
+        collate_fn=CustomDataset.valid_collate_fn,
+        # pin_memory=True
+    )
+    
+    model = build_segmentor(config=config['model'])
+    optimizer = build_optimizer(module=model, config=config['optimizer'])
+    scheduler_config = config.get('scheduler', False)
+    if scheduler_config:
+        scheduler = build_scheduler(optimizer_module=optimizer, config=scheduler_config)
+    else:
+        scheduler = DummyScheduler()
+
+    return model, optimizer, scheduler, train_loader, valid_loader
 
 
 class TrainnerArgs:
@@ -47,66 +84,62 @@ class TrainnerArgs:
             self.eval_interval = eval_interval
 
 
-def train_one_step(model, optimizer, scheduler, batch, scaler, fp16, device):
-    images, labels = batch['image'].cuda(), batch['label'].cuda()
-    optimizer.zero_grad()
-    with amp.autocast(enabled=fp16):
-        loss, losses = model.forward_train(image=images, label=labels)
-    scaler.scale(loss).backward()
-    scaler.step(optimizer)
-    scaler.update()
-
-    scheduler.step()
-    return loss, losses
-
-
-def trainner(model, optimizer, scheduler, train_loader, valid_dataset, trainner_args: TrainnerArgs):
-    set_logger(log_file=os.path.join(trainner_args.work_dir, 'train.log'), level=trainner_args.log_level)
+def train(config: dict, trainner_args: TrainnerArgs):
+    warnings.simplefilter('ignore')
+    log_path = os.path.join(trainner_args.work_dir, 'train.log')
+    set_logger(log_file=log_path, level=trainner_args.log_level)
+    seed_everything(seed=trainner_args.seed)
 
     logging.info(f'Python info: {sys.version}')
     logging.info(f'PyTroch version: {torch.__version__}')
     logging.info(f'GPU model: {torch.cuda.get_device_name(0)}')
+    logging.info(msg=f'use amp: {trainner_args.fp16}')
+
+    model, optimizer, scheduler, train_loader, valid_dataset = build_train_componet(config=config)
+    model.to(trainner_args.device)
 
     one_epoch_size = train_loader.dataset.__len__() // train_loader.batch_size
     best_loss = float('Inf')
     best_score = -float('Inf')
-    best_state = deepcopy(model.state_dict())
+    best_state = copy.deepcopy(model.state_dict())
     mean_train_loss = 0.0
     loss_dict = {key: 0.0 for key in model.losses.keys()}
 
-    logging.info(msg=f'use amp: {trainner_args.fp16}')
-
     if trainner_args.save_checkpoint:
         os.makedirs(f'{trainner_args.work_dir}/checkpoints/', exist_ok=True)
-
+    
     if trainner_args.load_checkpoint:
         cpt = torch.load(trainner_args.load_checkpoint)
         model.load_state_dict(cpt['model'])
         optimizer.load_state_dict(cpt['optimizer'])
         scheduler.load_state_dict(cpt['lr_scheduler'])
         start_step = cpt['step'] + 1
-        logging.info(msg=f'checkpoint from: {trainner_args.load_checkpoint}')
+        logging.info(msg=f'checkpoint load from: {trainner_args.load_checkpoint}')
     else:
         start_step = 1
 
     scaler = amp.GradScaler(enabled=trainner_args.fp16)
 
+    # for step, batch in zip(range(start_step, trainner_args.max_iters + 1), itertools.cycle(train_loader)):
     for step, batch in zip(range(start_step, trainner_args.max_iters + 1), train_loader):
         logging.debug(msg=f'step: {step}')
-        loss, losses = train_one_step(
-            model=model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            batch=batch,
-            scaler=scaler,
-            fp16=trainner_args.fp16,
-            device=trainner_args.device,
-        )
+
+        images, labels = batch['images'].to(trainner_args.device), batch['labels'].to(trainner_args.device)
+        optimizer.zero_grad()
+        with amp.autocast(enabled=trainner_args.fp16):
+            loss, losses = model.forward_train(images=images, labels=labels)
+        
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        scheduler.step()
 
         mean_train_loss += loss.item()
         for key in losses.keys():
             loss_dict[key] += losses[key].item()
-
+        
         if step % trainner_args.log_interval == 0:
             log_msg = f'epoch: {step/one_epoch_size:.2f} - step: [{step}/{trainner_args.max_iters}]'
             log_msg += f' - lr: {scheduler.get_last_lr()[0]:.6f}'
@@ -118,35 +151,45 @@ def trainner(model, optimizer, scheduler, train_loader, valid_dataset, trainner_
             logging.info(msg=log_msg)
             mean_train_loss = 0.0
             loss_dict = {key: 0.0 for key in model.losses.keys()}
-
+        
         if step % trainner_args.eval_interval == 0:
             if valid_dataset is not None:
                 model.eval()
-                valid_score = evaluate_fn(model=model, dataset=valid_dataset, threshold=trainner_args.threshold)
-                logging.info(msg=f'step: [{step}/{trainner_args.max_iters}] - dice score: {valid_score:.6f}')
-                if best_score < valid_score:
-                    best_score = valid_score
-                    best_state = deepcopy(model.state_dict())
+                valid_scores = evalate(
+                    model=model,
+                    valid_loader=valid_dataset,
+                    metrics=config['metrics'],
+                    fp16=trainner_args.fp16,
+                    device=trainner_args.device
+                )
+
+                valid_acc = valid_scores.pop('accuracy')
+                evalate_msg = f' - accuracy: {valid_acc:.4f}'
+
+                for key, value in valid_scores.items():
+                    evalate_msg += f' - {key}: {value:.6f}'
+                
+                logging.info(msg=f'epoch: {step/one_epoch_size:.2f} - step: [{step}/{trainner_args.max_iters}]' + evalate_msg)
+                if best_score < valid_acc:
+                    best_score = valid_acc
+                    best_state = copy.deepcopy(model.state_dict())
                 model.train()
             else:
                 if (mean_train_loss / trainner_args.log_interval) < best_loss:
                     best_loss = mean_train_loss / trainner_args.log_interval
                     best_score = 0.0
-                    best_state = deepcopy(model.state_dict())
+                    best_state = copy.deepcopy(model.state_dict())
 
             if trainner_args.save_checkpoint:
                 cpt = {
-                    'model': deepcopy(model.state_dict()),
-                    'optimizer': deepcopy(optimizer.state_dict()),
-                    'lr_scheduler': deepcopy(scheduler.state_dict()),
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'lr_scheduler': scheduler.state_dict(),
                     'step': step
                 }
                 torch.save(cpt, f'{trainner_args.work_dir}/checkpoints/step{step}_checkpoint.cpt')
-
+                del cpt
+        
     logging.info(f'Best score: {best_score:.6f}')
     torch.save(best_state, os.path.join(trainner_args.work_dir, 'best_score.pth'))
     torch.save(model.state_dict(), os.path.join(trainner_args.work_dir, 'last.pth'))
-
-
-def iteration_runner(model, optimizer, scheduler, train_loader, test_dataset, trainner_args: TrainnerArgs):
-    pass

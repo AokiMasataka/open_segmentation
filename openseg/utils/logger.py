@@ -11,9 +11,17 @@ def set_logger(log_file='../sample.log', level='info'):
     file_handler.setFormatter(formatter)
 
     logger = logging.getLogger()
+
+    for handler in logger.handlers:
+        print(f'remove handler: {handler}')
+        logger.removeHandler(handler)
+    
     if level == 'debug':
-        logger.setLevel(logging.DEBUG)
+        log_lebel = logging.DEBUG
     elif level == 'info':
-        logger.setLevel(logging.INFO)
-    logger.addHandler(stream_handler)
+        log_lebel = logging.INFO
+    logger.setLevel(log_lebel)
+
+    if not logger.hasHandlers():
+        logger.addHandler(stream_handler)
     logger.addHandler(file_handler)
