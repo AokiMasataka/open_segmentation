@@ -1,47 +1,18 @@
 import torch
-from copy import deepcopy
-
-
-class Registry:
-    def __init__(self, name):
-        self._name = name
-        self._module_dict = dict()
-
-    def register_module(self, module, module_name=None):
-        self._module_dict[module.__name__] = module
-        return module
-
-    def build(self, config):
-        if isinstance(config, (list, tuple)):
-            return {conf['type']: self.build(config=deepcopy(conf)) for conf in config}
-        else:
-            _type = config.pop('type')
-            module = self._module_dict[_type]
-            return module(**config)
-
-    def get_module(self, name):
-        return self._module_dict[name]
+from ..utils import Registry
 
 
 BACKBONES = Registry(name='backbones')
 DECODERS = Registry(name='decoders')
-NECKS = Registry(name='necks')
 LOSSES = Registry(name='losses')
-SEGMENTER = Registry(name='segmenters')
+SEGMENTORS = Registry(name='segmentors')
 
 
-def build_model(config, pretrained_weight=None):
-    config['init_config'] = config.get('init_config', None)
-    config['test_config'] = config.get('test_config', None)
-    config['norm_config'] = config.get('norm_config', None)
-    segmenter_module = SEGMENTER.get_module(config.pop('type'))
-    if pretrained_weight is not None:
-        if config['init_config'] is None:
-            config['init_config'] = dict(pretrained=pretrained_weight)
-        else:
-            config['init_config']['pretrained'] = pretrained_weight
-    model = segmenter_module(**config)
-    
-        
-    return model
-
+def build_segmentor(config: dict, weight: str = None):
+    assert isinstance(config, dict), f'config type: {type(config)}, must be dict type'
+    segmentor = SEGMENTORS.build(config=config)
+    if weight is not None:
+        state_dict = torch.load(weight, map_location='cpu')
+        missing_kys = segmentor.load_state_dict(state_dict, strict=False)
+        print('miss match keys: ', missing_kys)
+    return segmentor

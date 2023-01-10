@@ -1,1 +1,2 @@
-from .train import TrainnerArgs, trainner
+from .evalate import evalate
+from .train import TrainnerArgs, train

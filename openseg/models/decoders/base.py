@@ -1,22 +1,37 @@
+import logging
 import torch
-from torch import nn
 
 
-class DecoderBase(nn.Module):
-    def __init__(self, init_config=None):
+class DecoderBase(torch.nn.Module):
+    def __init__(self, init_config: dict = None):
         super(DecoderBase, self).__init__()
-        assert isinstance(init_config, dict) or init_config is None
         self.init_config = init_config
     
     def init(self):
         if self.init_config is not None:
             if self.init_config.get('pretrained', False):
                 state_dict = torch.load(self.init_config['pretrained'], map_location='cpu')
+                match_keys = list()
+                miss_match_keys = list()
 
-                for key in self.state_dict.keys():
-                    if key in state_dict.keys():
-                        if state_dict[key].shape == self.state_dict[key].shape:
-                            self.state_dict[key] = state_dict[key]
+                for key, value in state_dict.items():
+                    miss_match = True
+                    if key in self.state_dict().keys():
+                        if self.state_dict()[key].shape == value.shape:
+                            self.state_dict()[key] = value
+                            miss_match = False
+                            match_keys.append(key)
+                    if miss_match:
+                        miss_match_keys.append(key)
+                
+            logging.info(msg='Decoder match keys:')
+            for match_key in match_keys:
+                logging.info(msg=f'    {match_key}')
             
-            if self.init_config.get('', False):
-                pass
+            logging.info(msg='Decoder miss match keys:')
+            for miss_match_key in miss_match_keys:
+                logging.info(msg=f'    {miss_match_key}')
+    
+    @property
+    def num_classes(self):
+        return self._num_classes
