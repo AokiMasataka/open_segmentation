@@ -26,6 +26,7 @@ class SegFormerHead(DecoderBase):
         eps: float = 1e-5
     ):
         super(SegFormerHead, self).__init__()
+        self._num_classes = num_classes
         self._decoder_channels = [embedding_dim]
         c1_in_channels, c2_in_channels, c3_in_channels, c4_in_channels = encoder_dims
 

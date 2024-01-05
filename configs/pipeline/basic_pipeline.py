@@ -25,29 +25,36 @@ test_pipeline = [
 ]
 
 data = dict(
-    train_batch_size=16,
-    valid_batch_size=16,
-    num_workers=8,
-    train=dict(
-        pipeline=train_pipeline,
-        data_root='dataset/path',
-        split='train/train_split.txt',
-        image_prefix='image_dir',
-        label_prefix='label_dir',
-        image_suffix='.jpg',
-        label_suffix='.png',
-        cache_image=False,
-        cache_label=False,
+	train=dict(
+		batch_size=16,
+		num_workers=8,
+		dataset=dict(
+			type='CustomDataset',
+			pipeline=train_pipeline,
+            data_root='dataset/path',
+            split='train/train_split.txt',
+            image_prefix='image_dir',
+            label_prefix='label_dir',
+            image_suffix='.jpg',
+            label_suffix='.png',
+            cache_image=False,
+            cache_label=False,
+        ),
     ),
-    valid=dict(
-        pipeline=test_pipeline,
-        data_root='dataset/path',
-        split='valid/valid_split.txt',
-        image_prefix='image_dir',
-        label_prefix='label_dir',
-        image_suffix='.jpg',
-        label_suffix='.png',
-        cache_image=False,
-        cache_label=False
-    )
+	valid=dict(
+		batch_size=16,
+		num_workers=8,
+		dataset=dict(
+			type='CustomDataset',
+			pipeline=test_pipeline,
+            data_root='dataset/path',
+            split='valid/valid_split.txt',
+            image_prefix='image_dir',
+            label_prefix='label_dir',
+            image_suffix='.jpg',
+            label_suffix='.png',
+            cache_image=False,
+            cache_label=False
+        )
+    ),
 )

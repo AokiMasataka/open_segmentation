@@ -1,8 +1,9 @@
 import torch
-from ..utils import Registry
+
+from openback.utils import Registry
+from openback import BACKBONES
 
 
-BACKBONES = Registry(name='backbones')
 DECODERS = Registry(name='decoders')
 LOSSES = Registry(name='losses')
 SEGMENTORS = Registry(name='segmentors')

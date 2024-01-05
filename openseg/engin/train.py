@@ -3,37 +3,31 @@ import sys
 import copy
 import logging
 import warnings
-import itertools
 import torch
 from torch.cuda import amp
 from torch.utils.data import DataLoader
 from .evalate import evalate
-from ..dataset import CustomDataset, InfiniteSampler
+from ..dataset import build_dataset, InfiniteSampler
 from ..models import build_segmentor
 from ..core import DummyScheduler, build_optimizer, build_scheduler
-from ..utils import set_logger, seed_everything
+from openback.utils import set_logger, seed_everything
+
+
+def build_data_loader(config: dict) -> DataLoader:
+    dataset = build_dataset(config=config['dataset'])
+    data_loader = DataLoader(
+        dataset=dataset,
+        batch_size=config['batch_size'],
+        num_workers=config.get('num_workers', os.cpu_count()),
+        collate_fn=dataset.train_collate_fn,
+        sampler=InfiniteSampler(dataset_size=dataset.__len__()),
+    )
+    return data_loader
 
 
 def build_train_componet(config: dict):
-    data_config = config['data']
-    train_dataset = CustomDataset(**data_config['train'])
-    valid_dataset = CustomDataset(**data_config['valid'])
-    train_loader = DataLoader(
-        dataset=train_dataset,
-        batch_size=data_config['train_batch_size'],
-        num_workers=data_config.get('num_workers', os.cpu_count()),
-        collate_fn=CustomDataset.train_collate_fn,
-        sampler=InfiniteSampler(dataset_size=train_dataset.__len__()),
-        # pin_memory=True
-    )
-
-    valid_loader = DataLoader(
-        dataset=valid_dataset,
-        batch_size=data_config['valid_batch_size'],
-        num_workers=data_config.get('num_workers', os.cpu_count()),
-        collate_fn=CustomDataset.valid_collate_fn,
-        # pin_memory=True
-    )
+    train_loader = build_data_loader(config=config['data']['train'])
+    valid_loader = build_data_loader(config=config['data']['valid'])
     
     model = build_segmentor(config=config['model'])
     optimizer = build_optimizer(module=model, config=config['optimizer'])

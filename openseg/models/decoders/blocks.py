@@ -1,6 +1,5 @@
 from torch import nn
-from torch.nn import functional
-from openbacks.layers import SEModule, CrossAttention, SelfAttention, FeedForward
+from openback.layer import SEModule, CrossAttention, SelfAttention, FeedForward
 
 
 _ACTIVATE = dict(relu=nn.ReLU, gelu=nn.GELU, silu=nn.SELU)

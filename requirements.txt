@@ -2,5 +2,4 @@ git+https://github.com/AokiMasataka/open_backbones.git@v0.0.1
 tqdm
 opencv-python
 numpy
-torch>=1.8.0
-torchvision>=0.10.0
+torch

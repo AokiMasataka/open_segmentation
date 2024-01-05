@@ -1,6 +1,6 @@
 from copy import deepcopy
 from .get_params import get_params, get_params_beckbone, get_params_decoder
-from ..utils import Registry
+from openback.utils import Registry
 
 
 OPTIMIZERS = Registry(name='optimizers')

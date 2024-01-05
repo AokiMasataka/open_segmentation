@@ -4,12 +4,12 @@ from tqdm import tqdm
 from pathlib import Path
 from copy import deepcopy
 from multiprocessing.pool import Pool
-import numpy as np
 import torch
 from torch.utils.data import Dataset
-from .builder import build_pipeline
+from .builder import DATASETS, build_pipeline
 
 
+@DATASETS.register_module
 class CustomDataset(Dataset):
     def __init__(
             self,

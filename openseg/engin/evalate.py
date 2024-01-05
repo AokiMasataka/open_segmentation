@@ -17,8 +17,6 @@ def evalate(model, valid_loader, metrics: list = ['mdice'], fp16: bool = False, 
 
         with torch.cuda.amp.autocast(enabled=fp16):
             predicts = model.forward_test(images)
-        
-        predicts = predicts.permute(0, 2, 3, 1)
 
         for metric_key, metric_fn in metrics_dict.items():
             score = metric_fn(predicts=predicts, labels=labels)

@@ -1,7 +1,8 @@
 import os
 import warnings
 import argparse
-from openseg import TrainnerArgs, train, load_config_file
+from openseg import TrainnerArgs, train
+from openback.utils import load_config_file
 
 
 def main():
